@@ -13,8 +13,11 @@ type Injector interface {
 	GetInstanceForKey(key Key) interface{}
 	GetInstance(instanceType reflect.Type) interface{}
 	GetTaggedInstance(instanceType reflect.Type, tag Tag) interface{}
-	Bind(key Key, provider Provider)
-	BindToInstance(key Key, instance interface{})
+	BindKey(key Key, provider Provider)
+	Bind(bindingType reflect.Type, provider Provider)
+	BindToInstance(bindingType reflect.Type, instance interface{})
+	BindTagged(bindingType reflect.Type, tag Tag, provider Provider)
+	BindToTaggedInstance(bindingType reflect.Type, tag Tag, instance interface{})
 	getBinding(key Key) (Provider, bool)
 	findParentBinding(key Key) (Provider, bool)
 	findChildBinding(key Key) (Provider, bool)
@@ -56,7 +59,16 @@ func (this injector) GetTaggedInstance(instanceType reflect.Type, tag Tag) inter
 	return this.GetInstanceForKey(CreateKeyForTaggedType(instanceType, tag))
 }
 
-func (this injector) Bind(key Key, provider Provider) {
+func (this injector) BindToInstance(instanceType reflect.Type, instance interface{}) {
+	this.BindKeyToInstance(CreateKeyForType(instanceType), instance)
+}
+
+func (this injector) BindToTaggedInstance(instanceType reflect.Type, tag Tag,
+		instance interface{}) {
+	this.BindKeyToInstance(CreateKeyForTaggedType(instanceType, tag), instance)
+}
+
+func (this injector) BindKey(key Key, provider Provider) {
 	_, ok := this.bindings[key]
 	if ! ok {
 		_, ok = this.findParentBinding(key)
@@ -70,8 +82,16 @@ func (this injector) Bind(key Key, provider Provider) {
 	this.bindings[key] = provider
 }
 
-func (this injector) BindToInstance(key Key, instance interface{}) {
-	this.Bind(key, func () interface{} { return instance })
+func (this injector) BindKeyToInstance(key Key, instance interface{}) {
+	this.BindKey(key, func () interface{} { return instance })
+}
+
+func (this injector) BindTagged(instanceType reflect.Type, tag Tag, provider Provider) {
+	this.BindKey(CreateKeyForTaggedType(instanceType, tag), provider)
+}
+
+func (this injector) Bind(instanceType reflect.Type, provider Provider) {
+	this.BindKey(CreateKeyForType(instanceType), provider)
 }
 
 func (this *injector) CreateChildInjector() Injector {
