@@ -14,7 +14,7 @@ func main() {
   	name = os.Args[1]
 	}
 
-	injector.BindToInstance(goose.CreateKeyForType(reflect.TypeOf("")), name)
+	injector.BindToInstance(reflect.TypeOf(""), name)
 	sayHello(injector)
 }
 
