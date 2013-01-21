@@ -5,14 +5,29 @@ import (
 	"testing";
 )
 
+// Tags that are primitive types. It is recommended to use const values if you go this way.
 const (
 	THING1 = iota
 	THING2
 )
 
+// Types that are used as tags.
 type Thing1 struct {}
 type Thing2 struct {}
 
+// Type used as a tag that is parameterized.
+type ParameterizedThing struct {
+	string
+}
+
+type ThingTag struct {
+	int
+}
+
+// Not preferred, but allowed. Similar to using @Named(constValue). Remember that const of
+// primitive types are just the value of the primitive, making collisions extremely likely.
+// Prefer to use a Type tag or a ParameterizedType tag that contains your constant type.
+// These are demonstrated in other tests.
 func TestTaggedInstanceBinding(t *testing.T) {
 	injector := CreateInjector()
 	injector.BindTaggedInstance(
@@ -27,8 +42,25 @@ func TestTaggedInstanceBinding(t *testing.T) {
 	)
 }
 
+// Use a parameterized tag type along with a const to assist users in creating the right tag.
+func TestParameterizedTagInstanceBinding(t *testing.T) {
+	injector := CreateInjector()
+	injector.BindTaggedInstance(
+		reflect.TypeOf(""),
+		ThingTag{THING1},
+		"foo",
+	)
+	injector.BindTaggedInstance(
+		reflect.TypeOf(""),
+		ThingTag{THING2},
+		"bar",
+	)
+}
+
+// Use separate types as a tag on the type.
 func TestTypeTaggedInstanceBinding(t *testing.T) {
 	injector := CreateInjector()
+	// To use a type as a tag, create an empty instance of that type.
 	injector.BindTaggedInstance(
 		reflect.TypeOf(""),
 		Thing1{},
@@ -41,7 +73,45 @@ func TestTypeTaggedInstanceBinding(t *testing.T) {
 	)
 }
 
-func TestNoDuplicateTypeTaggedInstanceBinding(t *testing.T) {
+// Use a single type with a generic primitive as a type parameter for the tag.
+func TestParameterizedTypeTaggedInstanceBinding(t *testing.T) {
+	injector := CreateInjector()
+	// To use a type as a tag, create an empty instance of that type.
+	injector.BindTaggedInstance(
+		reflect.TypeOf(""),
+		ParameterizedThing{"foo"},
+		"foo",
+	)
+	injector.BindTaggedInstance(
+		reflect.TypeOf(""),
+		ParameterizedThing{"bar"},
+		"bar",
+	)
+}
+
+// Attempt (and fail) to bind a parameterized type tag twice in the same injector.
+func TestDuplicateParameterizedTypeTaggedInstanceBindingPanics(t *testing.T) {
+	injector := CreateInjector()
+	// To use a type as a tag, create an empty instance of that type.
+	injector.BindTaggedInstance(
+		reflect.TypeOf(""),
+		ParameterizedThing{"foo"},
+		"foo",
+	)
+	defer func() {
+		// Expected
+		recover()
+	}()
+	injector.BindTaggedInstance(
+		reflect.TypeOf(""),
+		ParameterizedThing{"foo"},
+		"bar",
+	)
+	t.Error("Expected a panic because ParameterizedThing<foo> is already been bound")
+}
+
+// Attempt (and fail) to bind a type tag twice in the same injector.
+func TestDuplicateTaggedTypeInstanceBindingPanics(t *testing.T) {
 	injector := CreateInjector()
 	injector.BindTaggedInstance(
 		reflect.TypeOf(""),
@@ -63,7 +133,7 @@ func TestNoDuplicateTypeTaggedInstanceBinding(t *testing.T) {
 		"bar",
 	)
 
-	t.Error("Expected a panic when binding Thing2{} again")
+	t.Error("Expected a panic when binding Thing2 again")
 }
 
 func TestTypeInstanceBinding(t *testing.T) {
@@ -76,7 +146,7 @@ func TestTypeInstanceBinding(t *testing.T) {
 	}
 }
 
-func TestNoLookupCycles(t *testing.T) {
+func TestContainerRepeatedLookupsDisallowed(t *testing.T) {
 	injector := CreateInjector()
 	injector.BindInstance(reflect.TypeOf(""), "foo")
 	container := injector.CreateContainer()
@@ -84,6 +154,7 @@ func TestNoLookupCycles(t *testing.T) {
 	if value == nil || value != "foo" {
 		t.Error("Expected to get the string binding value 'foo'");
 	}
+
 	defer func () {
 		recover()
 	}()
@@ -106,11 +177,11 @@ func getStringInstance(injector Injector) interface{} {
 
 func TestTypeInstanceBindingFailure(t *testing.T) {
 	var injector = CreateInjector()
+	container := injector.CreateContainer()
+
 	defer func() {
 		recover()
 	}()
-
-	container := injector.CreateContainer()
 	container.GetInstance(reflect.TypeOf(""))
 	t.Error("Expected to panic on missing string key")
 }
@@ -127,11 +198,11 @@ func TestTypeInstanceBindingWithTag(t *testing.T) {
 
 func TestTypeInstanceBindingWithTagFailure(t *testing.T) {
 	injector := CreateInjector()
+	container := injector.CreateContainer()
+
 	defer func() {
 		recover()
 	}()
-
-	container := injector.CreateContainer()
 	container.GetTaggedInstance(reflect.TypeOf(""), THING1)
 	t.Error("Expected to panic on missing string(THING1) key")
 }
@@ -157,7 +228,7 @@ func TestTypeProviderBindingWithTag(t *testing.T) {
 	}
 }
 
-func TestDeferToParentInjector(t *testing.T) {
+func TestDelegateToParentInjector(t *testing.T) {
 	parent := CreateInjector()
 	child := parent.CreateChildInjector()
 
