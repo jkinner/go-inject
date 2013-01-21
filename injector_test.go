@@ -1,6 +1,7 @@
 package goose
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 )
@@ -293,4 +294,53 @@ func TestAlreadyBoundInParentInjector(t *testing.T) {
 	parent.BindInstance(reflect.TypeOf(""), "foo")
 	child.BindInstance(reflect.TypeOf(""), "foo")
 	t.Error("Expected to fail because already bound in parent injector")
+}
+
+type Singleton struct{}
+
+func TestScopedBinding(t *testing.T) {
+	i := 100
+	injector := CreateInjector()
+	scope := CreateSimpleScope()
+	injector.BindScope(scope, Singleton{})
+	injector.BindKeyInScope(
+		CreateKeyForType(reflect.TypeOf(0)),
+		func(container Container) interface{} {
+			i += 1
+			return i
+		},
+		Singleton{})
+	scope.Enter()
+	container := injector.CreateContainer()
+	first := container.GetInstance(reflect.TypeOf(0))
+	container = injector.CreateContainer()
+	second := container.GetInstance(reflect.TypeOf(0))
+	if first != second {
+		t.Error(fmt.Sprintf("Scoped binding did not return the same value when still in scope (%d != %d)", first, second))
+	}
+}
+
+func TestScopedBindingInvokedWhenScopeResets(t *testing.T) {
+	i := 100
+	injector := CreateInjector()
+	scope := CreateSimpleScope()
+	injector.BindScope(scope, Singleton{})
+	injector.BindKeyInScope(
+		CreateKeyForType(reflect.TypeOf(0)),
+		func(container Container) interface{} {
+			fmt.Println("Executing underlying provider having value", i)
+			i += 1
+			return i
+		},
+		Singleton{})
+	scope.Enter()
+	container := injector.CreateContainer()
+	first := container.GetInstance(reflect.TypeOf(0))
+	scope.Exit()
+	scope.Enter()
+	container = injector.CreateContainer()
+	second := container.GetInstance(reflect.TypeOf(0))
+	if first == second {
+		t.Error(fmt.Sprintf("Scoped binding returned the same value when scope reset (%d == %d)", first, second))
+	}
 }

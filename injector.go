@@ -15,7 +15,7 @@ type Tag interface{}
 	Signature for provider functions. Provider functions are used to dynamically allocate an instance
 	at run-time.
 */
-type Provider func(container Container) interface{}
+type Provider func(Container) interface{}
 
 /*
 	Injector aggregates binding configuration and creates Containers based on that configuration.
@@ -34,22 +34,37 @@ type Provider func(container Container) interface{}
 */
 type Injector interface {
 	// Binds a type to a Provider function.
-	Bind(bindingType reflect.Type, provider Provider)
+	Bind(reflect.Type, Provider)
 
 	// Binds a type to a single instance.
-	BindInstance(bindingType reflect.Type, instance interface{})
+	BindInstance(reflect.Type, interface{})
 
 	// Binds a key to a Provider function.
-	BindKey(key Key, provider Provider)
+	BindKey(Key, Provider)
+
+	// Binds a key to a Provider function, caching it within the specified scope.
+	BindKeyInScope(Key, Provider, Tag)
 
 	// Binds a key to a single instance.
-	BindKeyInstance(key Key, instance interface{})
+	BindKeyInstance(Key, interface{})
+
+	// Binds a key to a single instance.
+	BindKeyInstanceInScope(Key, interface{}, Tag)
+
+	// Binds a scope to a tag.
+	BindScope(Scope, Tag)
 
 	// Binds a tagged type to a Provider function.
-	BindTagged(bindingType reflect.Type, tag Tag, provider Provider)
+	BindTagged(reflect.Type, Tag, Provider)
+
+	// Binds a tagged type to a Provider function.
+	BindTaggedInScope(reflect.Type, Tag, Provider, Tag)
 
 	// Binds a tagged type to a single instance.
-	BindTaggedInstance(bindingType reflect.Type, tag Tag, instance interface{})
+	BindTaggedInstance(reflect.Type, Tag, interface{})
+
+	// Binds a tagged type to a single instance.
+	BindTaggedInstanceInScope(reflect.Type, Tag, interface{}, Tag)
 
 	// Creates a child injector that can bind additional types not available from this Injector.
 	CreateChildInjector() Injector
@@ -58,30 +73,38 @@ type Injector interface {
 	CreateContainer() Container
 
 	// Exposes a type to its parent injector.
-	Expose(bindingType reflect.Type)
+	Expose(reflect.Type)
 
 	// Exposes a key binding to its parent injector.
-	ExposeKey(key Key)
+	ExposeKey(Key)
 
 	// Exposes a tagged type to its parent injector.
-	ExposeTagged(bindingType reflect.Type, tag Tag)
+	ExposeTagged(reflect.Type, Tag)
 
 	// Gets the binding for a key, searching the current injector and all ancestor injectors.
-	getBinding(key Key) (Provider, bool)
+	getBinding(Key) (Provider, bool)
 
 	/*
 		Searches the parent injector for the key, continuing to search upward until the
 		root injector is found.
 	*/
-	findAncestorBinding(key Key) (Provider, bool)
+	findAncestorBinding(Key) (Provider, bool)
 }
 
 // The context holds all the keys used by a given object.
 type context map[Key]Key
 
+// Bindings for each key in the injector.
+type bindings map[Key]Provider
+
+type scopes map[Tag]Scope
+
 type injector struct {
 	// The bindings present in this injector.
-	bindings map[Key]Provider
+	bindings
+
+	// Registered scopes (shared among all injectors)
+	scopes *scopes
 
 	// The parent injector. See getBinding(), findAncestorBinding().
 	parent *injector
@@ -95,8 +118,10 @@ type injector struct {
 
 func CreateInjector() Injector {
 	context := make(context)
+	scopes := make(scopes)
 	return &injector{
 		bindings: make(map[Key]Provider),
+		scopes:   &scopes,
 		parent:   nil,
 		children: make(map[*injector]*injector),
 		context:  &context,
@@ -106,6 +131,11 @@ func CreateInjector() Injector {
 func (this injector) Bind(instanceType reflect.Type, provider Provider) {
 	this.BindKey(CreateKeyForType(instanceType), provider)
 }
+
+func (this injector) BindInScope(bindingType reflect.Type, provider Provider, scopeTag Tag) {
+	this.BindKeyInScope(CreateKeyForType(bindingType), provider, scopeTag)
+}
+
 
 func (this injector) BindInstance(instanceType reflect.Type, instance interface{}) {
 	this.BindKeyInstance(CreateKeyForType(instanceType), instance)
@@ -120,8 +150,29 @@ func (this injector) BindKey(key Key, provider Provider) {
 	this.bindings[key] = provider
 }
 
+func (this injector) BindKeyInScope(key Key, provider Provider, scopeTag Tag) {
+	var scopes = *this.scopes
+	if scope, exists := scopes[scopeTag]; exists {
+		this.BindKey(key, scope.Scope(key, provider))
+	} else {
+		panic(fmt.Sprintf("Scope tag '%s' is not bound", scopeTag))
+	}
+}
+
 func (this injector) BindKeyInstance(key Key, instance interface{}) {
 	this.BindKey(key, func(container Container) interface{} { return instance })
+}
+
+func (this injector) BindKeyInstanceInScope(key Key, value interface{}, scopeTag Tag) {
+	this.BindKeyInScope(key, func (container Container) interface{} { return value }, scopeTag)
+}
+
+func (this injector) BindTaggedInScope(bindingType reflect.Type, tag Tag, provider Provider, scopeTag Tag) {
+	this.BindKeyInScope(CreateKeyForTaggedType(bindingType, tag), provider, scopeTag)
+}
+
+func (this injector) BindTagged(instanceType reflect.Type, tag Tag, provider Provider) {
+	this.BindKey(CreateKeyForTaggedType(instanceType, tag), provider)
 }
 
 func (this injector) BindTaggedInstance(instanceType reflect.Type, tag Tag,
@@ -129,18 +180,20 @@ func (this injector) BindTaggedInstance(instanceType reflect.Type, tag Tag,
 	this.BindKeyInstance(CreateKeyForTaggedType(instanceType, tag), instance)
 }
 
-func (this injector) BindTagged(instanceType reflect.Type, tag Tag, provider Provider) {
-	this.BindKey(CreateKeyForTaggedType(instanceType, tag), provider)
+func (this injector) BindTaggedInstanceInScope(bindingType reflect.Type, tag Tag, value interface{}, scopeTag Tag) {
+	this.BindKeyInstanceInScope(CreateKeyForTaggedType(bindingType, tag), value, scopeTag)
 }
 
 // Creates a child injector that can contain bindings not available to the parent injector.
 func (this *injector) CreateChildInjector() Injector {
 	child := injector{
 		bindings: make(map[Key]Provider),
+		scopes:   this.scopes,
 		parent:   this,
 		children: make(map[*injector]*injector),
 		context:  this.context,
 	}
+
 	this.children[&child] = &child
 	return &child
 }
@@ -225,22 +278,22 @@ func (this injector) findAncestorBinding(key Key) (Provider, bool) {
 */
 type Container interface {
 	// Returns an instance of the type bound by the key.
-	GetInstanceForKey(key Key) interface{}
+	GetInstanceForKey(Key) interface{}
 
 	// Returns an instance of the type.
-	GetInstance(instanceType reflect.Type) interface{}
+	GetInstance(reflect.Type) interface{}
 
 	// Returns an instance of the type tagged with the tag.
-	GetTaggedInstance(instanceType reflect.Type, tag Tag) interface{}
+	GetTaggedInstance(reflect.Type, Tag) interface{}
 
 	// Returns a Provider that can return an instance of the type bound by the key.
-	GetProviderForKey(key Key) Provider
+	GetProviderForKey(Key) Provider
 
 	// Returns a Provider that can return an instance of the type.
-	GetProvider(instanceType reflect.Type) Provider
+	GetProvider(reflect.Type) Provider
 
 	// Returns a Provider that can return an instance of the type tagged with the tag.
-	GetTaggedProvider(instanceType reflect.Type, tag Tag) Provider
+	GetTaggedProvider(reflect.Type, Tag) Provider
 }
 
 type container struct {
@@ -321,4 +374,66 @@ func (this key) String() string {
 		return fmt.Sprintf("%v", this.typeLiteral)
 	}
 	return fmt.Sprintf("%v<%s(%v)>", this.typeLiteral, reflect.TypeOf(this.tag).Name(), this.tag)
+}
+
+type simplescope struct {
+	name   string
+	values map[Key]interface{}
+}
+
+type Scope interface {
+	Scope(Key, Provider) Provider
+}
+
+type SimpleScope interface {
+	Scope(Key, Provider) Provider
+	Enter()
+	Exit()
+}
+
+func (this simplescope) Enter() {
+	this.values = make(map[Key]interface{})
+}
+
+func (this simplescope) Exit() {
+	keys := make(map[Key]Key)
+	for key, _ := range this.values {
+		keys[key] = key
+	}
+	for key, _ := range keys {
+		delete(this.values, key)
+	}
+}
+
+func CreateSimpleScope() SimpleScope {
+	return simplescope{name: "SimpleScope", values: make(map[Key]interface{})}
+}
+
+func CreateSimpleScopeWithName(name string) SimpleScope {
+	return simplescope{name: name, values: make(map[Key]interface{})}
+}
+
+func (this injector) BindScope(scope Scope, scopeTag Tag) {
+	var scopes = *this.scopes
+	if _, exists := scopes[scopeTag]; exists {
+		panic(fmt.Sprintf("Scope is already bound for tag '%s'", scopeTag))
+	}
+	scopes[scopeTag] = scope
+}
+
+func (this simplescope) Scope(key Key, provider Provider) Provider {
+	return func(container Container) interface{} {
+		if this.values == nil {
+			panic(fmt.Sprintf("Attempt to access %s outside of scope %s", key, this.name))
+		}
+
+		if value, exists := this.values[key]; exists {
+			return value
+		}
+
+		value := provider(container)
+		this.values[key] = value
+
+		return value
+	}
 }
