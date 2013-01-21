@@ -13,9 +13,9 @@ func main() {
 	flag.Parse()
 	injector := goose.CreateInjector()
 	injector.Bind(reflect.TypeOf(""), func () (interface{}) { return *name })
-	sayHello(injector)
+	sayHello(injector.CreateContainer())
 }
 
-func sayHello(injector goose.Injector) {
-	fmt.Println("Hello", injector.GetInstance(reflect.TypeOf("")), "!")
+func sayHello(container goose.Container) {
+	fmt.Println("Hello", container.GetInstance(reflect.TypeOf("")), "!")
 }
