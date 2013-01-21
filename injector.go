@@ -136,7 +136,6 @@ func (this injector) BindInScope(bindingType reflect.Type, provider Provider, sc
 	this.BindKeyInScope(CreateKeyForType(bindingType), provider, scopeTag)
 }
 
-
 func (this injector) BindInstance(instanceType reflect.Type, instance interface{}) {
 	this.BindKeyInstance(CreateKeyForType(instanceType), instance)
 }
@@ -164,7 +163,7 @@ func (this injector) BindKeyInstance(key Key, instance interface{}) {
 }
 
 func (this injector) BindKeyInstanceInScope(key Key, value interface{}, scopeTag Tag) {
-	this.BindKeyInScope(key, func (container Container) interface{} { return value }, scopeTag)
+	this.BindKeyInScope(key, func(container Container) interface{} { return value }, scopeTag)
 }
 
 func (this injector) BindTaggedInScope(bindingType reflect.Type, tag Tag, provider Provider, scopeTag Tag) {

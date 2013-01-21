@@ -1,10 +1,10 @@
 package main
 
 import (
-	"fmt";
-	"github.com/jkinner/goose";
-	"os";
-	"reflect";
+	"fmt"
+	"github.com/jkinner/goose"
+	"os"
+	"reflect"
 )
 
 // Injector tags
@@ -13,13 +13,13 @@ type Name struct{}
 
 func ConfigureInjector(injector goose.Injector) {
 	injector.BindTagged(reflect.TypeOf(""), HelloString{},
-		func (container goose.Container) interface{} {
+		func(container goose.Container) interface{} {
 			return fmt.Sprintf(
 				"Hello, %s!", container.GetTaggedInstance(reflect.TypeOf(""), Name{}))
 		})
 	var name = "world"
 	if len(os.Args) > 1 {
-  	name = os.Args[1]
+		name = os.Args[1]
 	}
 	injector.BindTaggedInstance(reflect.TypeOf(""), Name{}, name)
 }
