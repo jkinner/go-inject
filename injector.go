@@ -1,21 +1,21 @@
 package goose
 
 import (
-	"fmt";
-	"reflect";
+	"fmt"
+	"reflect"
 )
 
 // Key used to uniquely identify a binding.
-type Key interface {}
+type Key interface{}
 
 // Type used to identify a tagged type binding.
-type Tag interface {}
+type Tag interface{}
 
 /*
 	Signature for provider functions. Provider functions are used to dynamically allocate an instance
 	at run-time.
 */
-type Provider func (container Container) interface{}
+type Provider func(container Container) interface{}
 
 /*
 	Injector aggregates binding configuration and creates Containers based on that configuration.
@@ -77,17 +77,17 @@ type Injector interface {
 }
 
 // The context holds all the keys used by a given object.
-type context map[Key] Key
+type context map[Key]Key
 
 type injector struct {
 	// The bindings present in this injector.
-	bindings map[Key] Provider
+	bindings map[Key]Provider
 
 	// The parent injector. See getBinding(), findAncestorBinding().
 	parent *injector
 
 	// The child injectors. Each child will have this injector as the parent.
-	children map[*injector] *injector
+	children map[*injector]*injector
 
 	// A pointer to the context for this injector and all ancestor and descendant injectors.
 	context *context
@@ -95,11 +95,11 @@ type injector struct {
 
 func CreateInjector() Injector {
 	context := make(context)
-	return &injector {
-		bindings: make(map[Key] Provider),
-		parent: nil,
-		children: make(map[*injector] *injector),
-		context: &context,
+	return &injector{
+		bindings: make(map[Key]Provider),
+		parent:   nil,
+		children: make(map[*injector]*injector),
+		context:  &context,
 	}
 }
 
@@ -114,18 +114,18 @@ func (this injector) BindInstance(instanceType reflect.Type, instance interface{
 func (this injector) BindKey(key Key, provider Provider) {
 	context := *this.context
 	if _, ok := context[key]; ok {
-		panic(fmt.Sprintf("%v is already bound", key));
+		panic(fmt.Sprintf("%v is already bound", key))
 	}
 	context[key] = key
 	this.bindings[key] = provider
 }
 
 func (this injector) BindKeyInstance(key Key, instance interface{}) {
-	this.BindKey(key, func (container Container) interface{} { return instance })
+	this.BindKey(key, func(container Container) interface{} { return instance })
 }
 
 func (this injector) BindTaggedInstance(instanceType reflect.Type, tag Tag,
-		instance interface{}) {
+	instance interface{}) {
 	this.BindKeyInstance(CreateKeyForTaggedType(instanceType, tag), instance)
 }
 
@@ -135,11 +135,11 @@ func (this injector) BindTagged(instanceType reflect.Type, tag Tag, provider Pro
 
 // Creates a child injector that can contain bindings not available to the parent injector.
 func (this *injector) CreateChildInjector() Injector {
-	child := injector {
-		bindings: make(map[Key] Provider),
-		parent: this,
-		children: make(map[*injector] *injector),
-		context: this.context,
+	child := injector{
+		bindings: make(map[Key]Provider),
+		parent:   this,
+		children: make(map[*injector]*injector),
+		context:  this.context,
 	}
 	this.children[&child] = &child
 	return &child
@@ -147,7 +147,7 @@ func (this *injector) CreateChildInjector() Injector {
 
 // Creates a Container that is used to request values during object creation.
 func (this injector) CreateContainer() Container {
-	return container {
+	return container{
 		this,
 		make(context),
 	}
@@ -194,7 +194,7 @@ func (this injector) findAncestorBinding(key Key) (Provider, bool) {
 	as a Provider or as a value. A new Container should be used for each injected type. A Container
 	will panic if a key is looked up more than once. This behavior is intended to detect and prevent
 	cycles in depedencies.
-	
+
 	For example, suppose you have a type A that gets an instance of type B that in turn relies
 	on type A again (A -> B -> A). The types would have a structure like this:
 
@@ -299,18 +299,18 @@ func (this container) GetTaggedInstance(instanceType reflect.Type, tag Tag) inte
 
 type key struct {
 	typeLiteral reflect.Type
-	tag Tag
+	tag         Tag
 }
 
 func CreateKeyForType(typeLiteral reflect.Type) Key {
-	return key {
+	return key{
 		typeLiteral,
 		nil,
 	}
 }
 
 func CreateKeyForTaggedType(typeLiteral reflect.Type, tag Tag) Key {
-	return key {
+	return key{
 		typeLiteral,
 		tag,
 	}

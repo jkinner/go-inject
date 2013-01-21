@@ -1,8 +1,8 @@
 package goose
 
 import (
-	"reflect";
-	"testing";
+	"reflect"
+	"testing"
 )
 
 // Tags that are primitive types. It is recommended to use const values if you go this way.
@@ -12,8 +12,8 @@ const (
 )
 
 // Types that are used as tags.
-type Thing1 struct {}
-type Thing2 struct {}
+type Thing1 struct{}
+type Thing2 struct{}
 
 // Type used as a tag that is parameterized.
 type ParameterizedThing struct {
@@ -142,7 +142,7 @@ func TestTypeInstanceBinding(t *testing.T) {
 	container := injector.CreateContainer()
 	value := container.GetInstance(reflect.TypeOf(""))
 	if value == nil || value != "foo" {
-		t.Error("Expected to get the string binding value 'foo'");
+		t.Error("Expected to get the string binding value 'foo'")
 	}
 }
 
@@ -152,10 +152,10 @@ func TestContainerRepeatedLookupsDisallowed(t *testing.T) {
 	container := injector.CreateContainer()
 	value := container.GetInstance(reflect.TypeOf(""))
 	if value == nil || value != "foo" {
-		t.Error("Expected to get the string binding value 'foo'");
+		t.Error("Expected to get the string binding value 'foo'")
 	}
 
-	defer func () {
+	defer func() {
 		recover()
 	}()
 	container.GetInstance(reflect.TypeOf(""))
@@ -167,7 +167,7 @@ func TestTypeInstanceBindingThroughMethod(t *testing.T) {
 	injector.BindInstance(reflect.TypeOf(""), "foo")
 	value := getStringInstance(injector)
 	if value == nil || value != "foo" {
-		t.Error("Expected to get the string binding value 'foo'");
+		t.Error("Expected to get the string binding value 'foo'")
 	}
 }
 
@@ -192,7 +192,7 @@ func TestTypeInstanceBindingWithTag(t *testing.T) {
 	container := injector.CreateContainer()
 	value := container.GetTaggedInstance(reflect.TypeOf(""), THING1)
 	if value == nil || value != "foo" {
-		t.Error("Expected to get the string binding value 'foo'");
+		t.Error("Expected to get the string binding value 'foo'")
 	}
 }
 
@@ -209,22 +209,22 @@ func TestTypeInstanceBindingWithTagFailure(t *testing.T) {
 
 func TestTypeProviderBinding(t *testing.T) {
 	injector := CreateInjector()
-	injector.Bind(reflect.TypeOf(""), func (container Container) interface{} { return "foo" })
+	injector.Bind(reflect.TypeOf(""), func(container Container) interface{} { return "foo" })
 	container := injector.CreateContainer()
 	value := container.GetInstance(reflect.TypeOf(""))
 	if value == nil || value != "foo" {
-		t.Error("Expected to get the string binding value 'foo'");
+		t.Error("Expected to get the string binding value 'foo'")
 	}
 }
 
 func TestTypeProviderBindingWithTag(t *testing.T) {
 	injector := CreateInjector()
 	injector.BindTagged(reflect.TypeOf(""), THING2,
-			func (container Container) interface{} { return "foo" })
+		func(container Container) interface{} { return "foo" })
 	container := injector.CreateContainer()
 	value := container.GetTaggedInstance(reflect.TypeOf(""), THING2)
 	if value == nil || value != "foo" {
-		t.Error("Expected to get the string binding value 'foo'");
+		t.Error("Expected to get the string binding value 'foo'")
 	}
 }
 
@@ -270,7 +270,7 @@ func TestExposeToParentDoesNotExposeFurther(t *testing.T) {
 }
 
 func TestAlreadyBoundInChildInjector(t *testing.T) {
-	defer func () {
+	defer func() {
 		recover()
 	}()
 
@@ -283,7 +283,7 @@ func TestAlreadyBoundInChildInjector(t *testing.T) {
 }
 
 func TestAlreadyBoundInParentInjector(t *testing.T) {
-	defer func () {
+	defer func() {
 		recover()
 	}()
 
