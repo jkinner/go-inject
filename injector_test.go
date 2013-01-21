@@ -239,6 +239,36 @@ func TestDelegateToParentInjector(t *testing.T) {
 	}
 }
 
+func TestExposeToParent(t *testing.T) {
+	parent := CreateInjector()
+	child := parent.CreateChildInjector()
+
+	child.BindInstance(reflect.TypeOf(""), "foo")
+	child.Expose(reflect.TypeOf(""))
+	value := parent.CreateContainer().GetInstance(reflect.TypeOf(""))
+	if value == nil || value != "foo" {
+		t.Error("Expected to get parent binding for string value 'foo'")
+	}
+}
+
+func TestExposeToParentDoesNotExposeFurther(t *testing.T) {
+	parent := CreateInjector()
+	child := parent.CreateChildInjector()
+	grandchild := child.CreateChildInjector()
+
+	grandchild.BindInstance(reflect.TypeOf(""), "foo")
+	grandchild.Expose(reflect.TypeOf(""))
+	value := child.CreateContainer().GetInstance(reflect.TypeOf(""))
+	if value == nil || value != "foo" {
+		t.Error("Expected to get parent binding for string value 'foo'")
+	}
+	defer func() {
+		recover() // Expected
+	}()
+	parent.CreateContainer().GetInstance(reflect.TypeOf(""))
+	t.Error("Expected a panic when trying to get type exposed by grandchild from grandparent")
+}
+
 func TestAlreadyBoundInChildInjector(t *testing.T) {
 	defer func () {
 		recover()

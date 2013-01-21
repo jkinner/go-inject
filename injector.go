@@ -57,6 +57,15 @@ type Injector interface {
 	// Creates a Container that can be used to retrieve instance objects from the Injector.
 	CreateContainer() Container
 
+	// Exposes a type to its parent injector.
+	Expose(bindingType reflect.Type)
+
+	// Exposes a key binding to its parent injector.
+	ExposeKey(key Key)
+
+	// Exposes a tagged type to its parent injector.
+	ExposeTagged(bindingType reflect.Type, tag Tag)
+
 	// Gets the binding for a key, searching the current injector and all ancestor injectors.
 	getBinding(key Key) (Provider, bool)
 
@@ -75,7 +84,7 @@ type injector struct {
 	bindings map[Key] Provider
 
 	// The parent injector. See getBinding(), findAncestorBinding().
-	parent Injector
+	parent *injector
 
 	// The child injectors. Each child will have this injector as the parent.
 	children map[*injector] *injector
@@ -142,6 +151,26 @@ func (this injector) CreateContainer() Container {
 		this,
 		make(context),
 	}
+}
+
+func (this injector) Expose(bindingType reflect.Type) {
+	this.ExposeKey(CreateKeyForType(bindingType))
+}
+
+func (this injector) ExposeTagged(bindingType reflect.Type, tag Tag) {
+	this.ExposeKey(CreateKeyForTaggedType(bindingType, tag))
+}
+
+func (this injector) ExposeKey(key Key) {
+	if this.parent == nil {
+		panic(fmt.Sprintf("No parent injector available when exposing %s", key))
+	}
+	if _, exists := this.bindings[key]; !exists {
+		panic(fmt.Sprintf("No binding for %s is present in this injector", key))
+	}
+
+	// TODO(jkinner): Worry about caching in scopes.
+	this.parent.bindings[key] = this.bindings[key]
 }
 
 func (this injector) getBinding(key Key) (provider Provider, ok bool) {
