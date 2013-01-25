@@ -7,6 +7,9 @@ import (
 	"reflect"
 )
 
+/*
+	This is sort of how Guice works. But it's not really go-ish.
+*/
 func main() {
 	injector := goose.CreateInjector()
 	var name = "world"
@@ -14,10 +17,10 @@ func main() {
 		name = os.Args[1]
 	}
 
-	injector.BindToInstance(reflect.TypeOf(""), name)
+	injector.BindInstance(reflect.TypeOf(""), name)
 	sayHello(injector.CreateContainer())
 }
 
 func sayHello(container goose.Container) {
-	fmt.Println("Hello", container.GetInstance(reflect.TypeOf("")), "!")
+	fmt.Println(fmt.Sprintf("Hello, %s!", container.GetInstance(reflect.TypeOf(""))))
 }

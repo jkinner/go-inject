@@ -303,8 +303,8 @@ func TestScopedBinding(t *testing.T) {
 	injector := CreateInjector()
 	scope := CreateSimpleScope()
 	injector.BindScope(scope, Singleton{})
-	injector.BindKeyInScope(
-		CreateKeyForType(reflect.TypeOf(0)),
+	injector.BindInScope(
+		reflect.TypeOf(0),
 		func(container Container) interface{} {
 			i += 1
 			return i
@@ -325,8 +325,8 @@ func TestScopedBindingInvokedWhenScopeResets(t *testing.T) {
 	injector := CreateInjector()
 	scope := CreateSimpleScope()
 	injector.BindScope(scope, Singleton{})
-	injector.BindKeyInScope(
-		CreateKeyForType(reflect.TypeOf(0)),
+	injector.BindInScope(
+		reflect.TypeOf(0),
 		func(container Container) interface{} {
 			fmt.Println("Executing underlying provider having value", i)
 			i += 1
