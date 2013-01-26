@@ -284,6 +284,7 @@ func TestAlreadyBoundInChildInjector(t *testing.T) {
 
 	child.BindInstance(reflect.TypeOf(""), "foo")
 	parent.BindInstance(reflect.TypeOf(""), "foo")
+	child.Expose(reflect.TypeOf(""))
 	t.Error("Expected to fail because already bound in child injector")
 }
 
@@ -298,6 +299,14 @@ func TestAlreadyBoundInParentInjector(t *testing.T) {
 	parent.BindInstance(reflect.TypeOf(""), "foo")
 	child.BindInstance(reflect.TypeOf(""), "foo")
 	t.Error("Expected to fail because already bound in parent injector")
+}
+
+func TestCanBindInMultipleChildren(t *testing.T) {
+	parent := CreateInjector()
+	alice := parent.CreateChildInjector()
+	bob := parent.CreateChildInjector()
+	alice.BindInstance(reflect.TypeOf(""), "foo")
+	bob.BindInstance(reflect.TypeOf(""), "bar")
 }
 
 func TestSingletonScopedBinding(t *testing.T) {

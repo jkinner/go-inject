@@ -78,6 +78,21 @@ type Injector interface {
 	// Exposes a type to its parent injector.
 	Expose(Key)
 
+	// Exposes a type to its parent injector.
+	ExposeAndRename(Key, Key)
+
+	// Exposes a type to its parent injector.
+	ExposeTaggedAndRename(Key, Tag, Key)
+
+	// Exposes a type to its parent injector.
+	ExposeAndRenameTagged(Key, Key, Tag)
+
+	// Exposes a type to its parent injector.
+	ExposeAndTag(Key, Tag)
+
+	// Exposes a type to its parent injector.
+	ExposeTaggedAndRenameTagged(Key, Tag, Key, Tag)
+
 	// Exposes a tagged type to its parent injector.
 	ExposeTagged(Key, Tag)
 
@@ -111,27 +126,36 @@ type injector struct {
 
 	// A pointer to the context for this injector and all ancestor and descendant injectors.
 	context context
+
+	// A pointer to the context for just descendant injectors.
+	descendantContext context
 }
 
 func CreateInjector() Injector {
 	singleton := singletonscope{ make(map[Key]interface{}) }
-	context := make(context)
 	scopes := make(scopes)
 	scopes[Singleton{}] = &singleton
 	return &injector{
-		bindings: make(map[Key]Provider),
-		scopes:   scopes,
-		parent:   nil,
-		context:  context,
+		bindings: 					make(map[Key]Provider),
+		scopes:   					scopes,
+		parent:   					nil,
+		context:  					make(context),
+		descendantContext:  make(context),
 	}
 }
 
 func (this injector) Bind(key Key, provider Provider) {
-	context := this.context
-	if _, ok := context[key]; ok {
-		panic(fmt.Sprintf("%v is already bound", key))
+	if _, exists := this.context[key]; exists {
+		panic(fmt.Sprintf("%v is already bound.", key))
 	}
-	context[key] = key
+
+	if _, exists := this.findAncestorBinding(key); exists {
+		panic(fmt.Sprintf("%v is already bound in an ancestor injector.", key))
+	}
+
+	this.context[key] = key
+	this.descendantContext[key] = key
+
 	this.bindings[key] = provider
 }
 
@@ -173,9 +197,10 @@ func (this injector) BindTaggedInstanceInScope(bindingType Key, tag Tag, value i
 func (this *injector) CreateChildInjector() Injector {
 	child := injector{
 		bindings: make(map[Key]Provider),
-		scopes:   this.scopes,
-		parent:   this,
-		context:  this.context,
+		scopes:							this.scopes,
+		parent:						  this,
+		context:						make(context),
+		descendantContext:	this.descendantContext,
 	}
 
 	return &child
@@ -189,20 +214,42 @@ func (this injector) CreateContainer() Container {
 	}
 }
 
-func (this injector) ExposeTagged(bindingType Key, tag Tag) {
-	this.Expose(taggedKey { bindingType, tag })
+func (this injector) Expose(key Key) {
+	this.ExposeAndRename(key, key)
 }
 
-func (this injector) Expose(key Key) {
+func (this injector) ExposeTagged(key Key, tag Tag) {
+	this.ExposeAndRename(taggedKey { key, tag }, taggedKey { key, tag })
+}
+
+func (this injector) ExposeAndTag(key Key, tag Tag) {
+	this.ExposeAndRename(key, taggedKey { key, tag })
+}
+
+func (this injector) ExposeTaggedAndRename(key Key, tag Tag, parentKey Key) {
+	this.ExposeAndRename(taggedKey { key, tag }, parentKey)
+}
+
+func (this injector) ExposeTaggedAndRenameTagged(key Key, tag Tag, parentKey Key, parentTag Tag) {
+	this.ExposeAndRename(taggedKey { key, tag }, taggedKey { parentKey, parentTag })
+}
+
+func (this injector) ExposeAndRenameTagged(key Key, parentKey Key, parentTag Tag) {
+	this.ExposeAndRename(key, taggedKey { parentKey, parentTag })
+}
+
+func (this injector) ExposeAndRename(childKey Key, parentKey Key) {
 	if this.parent == nil {
-		panic(fmt.Sprintf("No parent injector available when exposing %s", key))
+		panic(fmt.Sprintf("No parent injector available when exposing %s.", childKey))
 	}
-	if _, exists := this.bindings[key]; !exists {
-		panic(fmt.Sprintf("No binding for %s is present in this injector", key))
+	if _, exists := this.bindings[childKey]; !exists {
+		panic(fmt.Sprintf("No binding for %s is present in the child injector.", childKey))
+	}
+	if _, exists := this.findAncestorBinding(parentKey); exists {
+		panic(fmt.Sprintf("A binding for %s already exists. It could come from another child injector or an ancestor injector.", parentKey))
 	}
 
-	// TODO(jkinner): Worry about caching in scopes.
-	this.parent.bindings[key] = this.bindings[key]
+	this.parent.bindings[parentKey] = this.bindings[childKey]
 }
 
 func (this injector) getBinding(key Key) (provider Provider, ok bool) {
@@ -211,11 +258,13 @@ func (this injector) getBinding(key Key) (provider Provider, ok bool) {
 }
 
 func (this injector) findAncestorBinding(key Key) (Provider, bool) {
-	if this.parent != nil {
+	parent := this.parent
+	for parent != nil {
 		if provider, ok := this.parent.getBinding(key); ok {
 			return provider, ok
 		}
-		return this.parent.findAncestorBinding(key)
+
+		parent = parent.parent
 	}
 
 	return nil, false
