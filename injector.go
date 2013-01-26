@@ -5,6 +5,11 @@ import (
 	"reflect"
 )
 
+// Context that is passed to scopes.
+type Context interface{}
+
+type Singleton struct{}
+
 // Key used to uniquely identify a binding.
 type Key interface{}
 type Tag interface{}
@@ -19,7 +24,7 @@ type taggedKey struct {
 	Signature for provider functions. Provider functions are used to dynamically allocate an instance
 	at run-time.
 */
-type Provider func(Container) interface{}
+type Provider func(Context, Container) interface{}
 
 /*
 	Injector aggregates binding configuration and creates Containers based on that configuration.
@@ -99,28 +104,30 @@ type injector struct {
 	bindings
 
 	// Registered scopes (shared among all injectors)
-	scopes *scopes
+	scopes scopes
 
 	// The parent injector. See getBinding(), findAncestorBinding().
 	parent *injector
 
 	// A pointer to the context for this injector and all ancestor and descendant injectors.
-	context *context
+	context context
 }
 
 func CreateInjector() Injector {
+	singleton := singletonscope{ make(map[Key]interface{}) }
 	context := make(context)
 	scopes := make(scopes)
+	scopes[Singleton{}] = &singleton
 	return &injector{
 		bindings: make(map[Key]Provider),
-		scopes:   &scopes,
+		scopes:   scopes,
 		parent:   nil,
-		context:  &context,
+		context:  context,
 	}
 }
 
 func (this injector) Bind(key Key, provider Provider) {
-	context := *this.context
+	context := this.context
 	if _, ok := context[key]; ok {
 		panic(fmt.Sprintf("%v is already bound", key))
 	}
@@ -129,7 +136,7 @@ func (this injector) Bind(key Key, provider Provider) {
 }
 
 func (this injector) BindInScope(key Key, provider Provider, scopeTag Tag) {
-	var scopes = *this.scopes
+	var scopes = this.scopes
 	if scope, exists := scopes[scopeTag]; exists {
 		this.Bind(key, scope.Scope(key, provider))
 	} else {
@@ -138,11 +145,11 @@ func (this injector) BindInScope(key Key, provider Provider, scopeTag Tag) {
 }
 
 func (this injector) BindInstance(key Key, instance interface{}) {
-	this.Bind(key, func(container Container) interface{} { return instance })
+	this.Bind(key, func(context Context, container Container) interface{} { return instance })
 }
 
 func (this injector) BindInstanceInScope(key Key, value interface{}, scopeTag Tag) {
-	this.BindInScope(key, func(container Container) interface{} { return value }, scopeTag)
+	this.BindInScope(key, func(context Context, container Container) interface{} { return value }, scopeTag)
 }
 
 func (this injector) BindTaggedInScope(bindingType Key, tag Tag, provider Provider, scopeTag Tag) {
@@ -250,10 +257,10 @@ func (this injector) findAncestorBinding(key Key) (Provider, bool) {
 */
 type Container interface {
 	// Returns an instance of the type.
-	GetInstance(Key) interface{}
+	GetInstance(Context, Key) interface{}
 
 	// Returns an instance of the type tagged with the tag.
-	GetTaggedInstance(Key, Tag) interface{}
+	GetTaggedInstance(Context, Key, Tag) interface{}
 
 	// Returns a Provider that can return an instance of the type.
 	GetProvider(Key) Provider
@@ -297,13 +304,13 @@ func (this container) GetTaggedProvider(instanceType Key, tag Tag) Provider {
 }
 
 // Returns an instance of the type bound to the key.
-func (this container) GetInstance(key Key) interface{} {
-	return this.GetProvider(key)(this)
+func (this container) GetInstance(context Context, key Key) interface{} {
+	return this.GetProvider(key)(context, this)
 }
 
 // Returns an instance of the instanceType tagged with tag.
-func (this container) GetTaggedInstance(instanceType Key, tag Tag) interface{} {
-	return this.GetInstance(taggedKey { instanceType, tag })
+func (this container) GetTaggedInstance(context Context, instanceType Key, tag Tag) interface{} {
+	return this.GetInstance(context, taggedKey { instanceType, tag })
 }
 
 func (this taggedKey) String() string {
@@ -315,60 +322,88 @@ func (this taggedKey) String() string {
 
 type simplescope struct {
 	name   string
-	values map[Key]interface{}
+	values map[Context]map[Key]interface{}
 }
 
 type Scope interface {
 	Scope(Key, Provider) Provider
 }
 
+type scopeKey struct {
+	Context
+	Key
+}
+
 type SimpleScope interface {
 	Scope(Key, Provider) Provider
-	Enter()
-	Exit()
+	Enter(Context)
+	Exit(Context)
 }
 
-func (this simplescope) Enter() {
-	this.values = make(map[Key]interface{})
+func (this *simplescope) Enter(context Context) {
+	this.values[context] = make(map[Key]interface{})
 }
 
-func (this simplescope) Exit() {
-	keys := make(map[Key]Key)
-	for key, _ := range this.values {
-		keys[key] = key
+func (this *simplescope) Exit(context Context) {
+	if _, exists := this.values[context]; exists {
+		delete(this.values, context)
+	} else {
+		panic(fmt.Sprintf("Already out of context when existing scope %v", this))
 	}
-	for key, _ := range keys {
-		delete(this.values, key)
+}
+
+func (this *simplescope) Scope(key Key, provider Provider) Provider {
+	return func(context Context, container Container) interface{} {
+		if scope, exists := this.values[context]; exists {
+			if value, exists := scope[key]; exists {
+				return value
+			}
+
+			value := provider(context, container)
+			scope[key] = value
+
+			return value
+		}
+		panic(fmt.Sprintf("Attempt to access %s outside of scope %s. %d scopes are active.", key, this.name, len(this.values)))
 	}
 }
 
 func CreateSimpleScope() SimpleScope {
-	return simplescope{name: "SimpleScope", values: make(map[Key]interface{})}
+	scope := simplescope{name: "SimpleScope", values: make(map[Context]map[Key]interface{})}
+	return &scope
 }
 
 func CreateSimpleScopeWithName(name string) SimpleScope {
-	return simplescope{name: name, values: make(map[Key]interface{})}
+	scope := simplescope{name: name, values: make(map[Context]map[Key]interface{})}
+	return &scope
 }
 
 func (this injector) BindScope(scope Scope, scopeTag Tag) {
-	var scopes = *this.scopes
-	if _, exists := scopes[scopeTag]; exists {
+	if _, exists := this.scopes[scopeTag]; exists {
 		panic(fmt.Sprintf("Scope is already bound for tag '%s'", scopeTag))
 	}
-	scopes[scopeTag] = scope
+	this.scopes[scopeTag] = scope
 }
 
-func (this simplescope) Scope(key Key, provider Provider) Provider {
-	return func(container Container) interface{} {
-		if this.values == nil {
-			panic(fmt.Sprintf("Attempt to access %s outside of scope %s", key, this.name))
-		}
+type singletonscope struct {
+	values map[Key]interface{}
+}
 
+func (this *singletonscope) Enter(context Context) {
+	panic("You're always in singletonscope. Do not try to enter this scope.")
+}
+
+func (this *singletonscope) Exit(context Context) {
+	panic("You're always in singletonscope. Do not try to exit this scope.")
+}
+
+func (this *singletonscope) Scope(key Key, provider Provider) Provider {
+	return func(context Context, container Container) interface{} {
 		if value, exists := this.values[key]; exists {
 			return value
 		}
 
-		value := provider(container)
+		value := provider(context, container)
 		this.values[key] = value
 
 		return value

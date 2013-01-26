@@ -16,6 +16,10 @@ const (
 type Thing1 struct{}
 type Thing2 struct{}
 
+type MyContext struct{
+	string
+}
+
 // Type used as a tag that is parameterized.
 type ParameterizedThing struct {
 	string
@@ -141,7 +145,7 @@ func TestTypeInstanceBinding(t *testing.T) {
 	injector := CreateInjector()
 	injector.BindInstance(reflect.TypeOf(""), "foo")
 	container := injector.CreateContainer()
-	value := container.GetInstance(reflect.TypeOf(""))
+	value := container.GetInstance(nil /* context */, reflect.TypeOf(""))
 	if value == nil || value != "foo" {
 		t.Error("Expected to get the string binding value 'foo'")
 	}
@@ -151,7 +155,7 @@ func TestContainerRepeatedLookupsDisallowed(t *testing.T) {
 	injector := CreateInjector()
 	injector.BindInstance(reflect.TypeOf(""), "foo")
 	container := injector.CreateContainer()
-	value := container.GetInstance(reflect.TypeOf(""))
+	value := container.GetInstance(nil /* context */, reflect.TypeOf(""))
 	if value == nil || value != "foo" {
 		t.Error("Expected to get the string binding value 'foo'")
 	}
@@ -159,7 +163,7 @@ func TestContainerRepeatedLookupsDisallowed(t *testing.T) {
 	defer func() {
 		recover()
 	}()
-	container.GetInstance(reflect.TypeOf(""))
+	container.GetInstance(nil /* context */, reflect.TypeOf(""))
 	t.Error("Expected to fail when retrieving the same key from the container")
 }
 
@@ -173,7 +177,7 @@ func TestTypeInstanceBindingThroughMethod(t *testing.T) {
 }
 
 func getStringInstance(injector Injector) interface{} {
-	return injector.CreateContainer().GetInstance(reflect.TypeOf(""))
+	return injector.CreateContainer().GetInstance(nil /* context */, reflect.TypeOf(""))
 }
 
 func TestTypeInstanceBindingFailure(t *testing.T) {
@@ -183,7 +187,7 @@ func TestTypeInstanceBindingFailure(t *testing.T) {
 	defer func() {
 		recover()
 	}()
-	container.GetInstance(reflect.TypeOf(""))
+	container.GetInstance(nil, reflect.TypeOf(""))
 	t.Error("Expected to panic on missing string key")
 }
 
@@ -191,7 +195,7 @@ func TestTypeInstanceBindingWithTag(t *testing.T) {
 	injector := CreateInjector()
 	injector.BindTaggedInstance(reflect.TypeOf(""), THING1, "foo")
 	container := injector.CreateContainer()
-	value := container.GetTaggedInstance(reflect.TypeOf(""), THING1)
+	value := container.GetTaggedInstance(nil /* context */, reflect.TypeOf(""), THING1)
 	if value == nil || value != "foo" {
 		t.Error("Expected to get the string binding value 'foo'")
 	}
@@ -204,15 +208,15 @@ func TestTypeInstanceBindingWithTagFailure(t *testing.T) {
 	defer func() {
 		recover()
 	}()
-	container.GetTaggedInstance(reflect.TypeOf(""), THING1)
+	container.GetTaggedInstance(nil /* context */, reflect.TypeOf(""), THING1)
 	t.Error("Expected to panic on missing string(THING1) key")
 }
 
 func TestTypeProviderBinding(t *testing.T) {
 	injector := CreateInjector()
-	injector.Bind(reflect.TypeOf(""), func(container Container) interface{} { return "foo" })
+	injector.Bind(reflect.TypeOf(""), func(_ Context, container Container) interface{} { return "foo" })
 	container := injector.CreateContainer()
-	value := container.GetInstance(reflect.TypeOf(""))
+	value := container.GetInstance(nil /* context */, reflect.TypeOf(""))
 	if value == nil || value != "foo" {
 		t.Error("Expected to get the string binding value 'foo'")
 	}
@@ -221,9 +225,9 @@ func TestTypeProviderBinding(t *testing.T) {
 func TestTypeProviderBindingWithTag(t *testing.T) {
 	injector := CreateInjector()
 	injector.BindTagged(reflect.TypeOf(""), THING2,
-		func(container Container) interface{} { return "foo" })
+		func(_ Context, _ Container) interface{} { return "foo" })
 	container := injector.CreateContainer()
-	value := container.GetTaggedInstance(reflect.TypeOf(""), THING2)
+	value := container.GetTaggedInstance(nil /* context */, reflect.TypeOf(""), THING2)
 	if value == nil || value != "foo" {
 		t.Error("Expected to get the string binding value 'foo'")
 	}
@@ -234,7 +238,7 @@ func TestDelegateToParentInjector(t *testing.T) {
 	child := parent.CreateChildInjector()
 
 	parent.BindInstance(reflect.TypeOf(""), "foo")
-	value := child.CreateContainer().GetInstance(reflect.TypeOf(""))
+	value := child.CreateContainer().GetInstance(nil /* context */, reflect.TypeOf(""))
 	if value == nil || value != "foo" {
 		t.Error("Expected to get parent binding for string value 'foo'")
 	}
@@ -246,7 +250,7 @@ func TestExposeToParent(t *testing.T) {
 
 	child.BindInstance(reflect.TypeOf(""), "foo")
 	child.Expose(reflect.TypeOf(""))
-	value := parent.CreateContainer().GetInstance(reflect.TypeOf(""))
+	value := parent.CreateContainer().GetInstance(nil /* context */, reflect.TypeOf(""))
 	if value == nil || value != "foo" {
 		t.Error("Expected to get parent binding for string value 'foo'")
 	}
@@ -259,14 +263,14 @@ func TestExposeToParentDoesNotExposeFurther(t *testing.T) {
 
 	grandchild.BindInstance(reflect.TypeOf(""), "foo")
 	grandchild.Expose(reflect.TypeOf(""))
-	value := child.CreateContainer().GetInstance(reflect.TypeOf(""))
+	value := child.CreateContainer().GetInstance(nil /* context */, reflect.TypeOf(""))
 	if value == nil || value != "foo" {
 		t.Error("Expected to get parent binding for string value 'foo'")
 	}
 	defer func() {
 		recover() // Expected
 	}()
-	parent.CreateContainer().GetInstance(reflect.TypeOf(""))
+	parent.CreateContainer().GetInstance(nil, reflect.TypeOf(""))
 	t.Error("Expected a panic when trying to get type exposed by grandchild from grandparent")
 }
 
@@ -296,50 +300,52 @@ func TestAlreadyBoundInParentInjector(t *testing.T) {
 	t.Error("Expected to fail because already bound in parent injector")
 }
 
-type Singleton struct{}
-
-func TestScopedBinding(t *testing.T) {
+func TestSingletonScopedBinding(t *testing.T) {
+	context := MyContext{"TestScopedBinding"}
 	i := 100
 	injector := CreateInjector()
-	scope := CreateSimpleScope()
-	injector.BindScope(scope, Singleton{})
+	scope := CreateSimpleScopeWithName("TestScopedBinding Scope")
 	injector.BindInScope(
 		reflect.TypeOf(0),
-		func(container Container) interface{} {
+		func(_ Context, _ Container) interface{} {
 			i += 1
 			return i
 		},
 		Singleton{})
-	scope.Enter()
+	scope.Enter(context)
 	container := injector.CreateContainer()
-	first := container.GetInstance(reflect.TypeOf(0))
+	first := container.GetInstance(context, reflect.TypeOf(0))
 	container = injector.CreateContainer()
-	second := container.GetInstance(reflect.TypeOf(0))
+	second := container.GetInstance(context, reflect.TypeOf(0))
 	if first != second {
 		t.Error(fmt.Sprintf("Scoped binding did not return the same value when still in scope (%d != %d)", first, second))
 	}
 }
 
+type TestScope struct {}
+
 func TestScopedBindingInvokedWhenScopeResets(t *testing.T) {
+	context := MyContext{"First context"}
 	i := 100
 	injector := CreateInjector()
 	scope := CreateSimpleScope()
-	injector.BindScope(scope, Singleton{})
+	injector.BindScope(scope, TestScope{})
 	injector.BindInScope(
 		reflect.TypeOf(0),
-		func(container Container) interface{} {
+		func(_ Context, _ Container) interface{} {
 			fmt.Println("Executing underlying provider having value", i)
 			i += 1
 			return i
 		},
-		Singleton{})
-	scope.Enter()
+		TestScope{})
+	scope.Enter(context)
 	container := injector.CreateContainer()
-	first := container.GetInstance(reflect.TypeOf(0))
-	scope.Exit()
-	scope.Enter()
+	first := container.GetInstance(context, reflect.TypeOf(0))
+	scope.Exit(context)
+	context = MyContext{"Second context"}
+	scope.Enter(context)
 	container = injector.CreateContainer()
-	second := container.GetInstance(reflect.TypeOf(0))
+	second := container.GetInstance(context, reflect.TypeOf(0))
 	if first == second {
 		t.Error(fmt.Sprintf("Scoped binding returned the same value when scope reset (%d == %d)", first, second))
 	}

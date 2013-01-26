@@ -22,5 +22,5 @@ func main() {
 }
 
 func sayHello(container goose.Container) {
-	fmt.Println(fmt.Sprintf("Hello, %s!", container.GetInstance(reflect.TypeOf(""))))
+	fmt.Println(fmt.Sprintf("Hello, %s!", container.GetInstance(nil, reflect.TypeOf(""))))
 }

@@ -19,10 +19,10 @@ func main() {
 	flag.Parse()
 	injector := goose.CreateInjector()
 	// Bind flag
-	injector.Bind(Name{}, func(container goose.Container) interface{} { return *name })
+	injector.Bind(Name{}, func(_ goose.Context, _ goose.Container) interface{} { return *name })
 	sayHello(injector.CreateContainer())
 }
 
 func sayHello(container goose.Container) {
-	fmt.Println(fmt.Sprintf("Hello, %s!", container.GetInstance(Name{})))
+	fmt.Println(fmt.Sprintf("Hello, %s!", container.GetInstance(nil, Name{})))
 }

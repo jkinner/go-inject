@@ -12,9 +12,9 @@ type Name struct{}
 
 func ConfigureInjector(injector goose.Injector) {
 	injector.Bind(HelloString{},
-		func(container goose.Container) interface{} {
+		func(context goose.Context, container goose.Container) interface{} {
 			return fmt.Sprintf(
-				"Hello, %s!", container.GetInstance(Name{}))
+				"Hello, %s!", container.GetInstance(context, Name{}))
 		})
 	var name = "world"
 	if len(os.Args) > 1 {
@@ -30,5 +30,5 @@ func main() {
 }
 
 func sayHello(container goose.Container) {
-	fmt.Println(container.GetInstance(HelloString{}))
+	fmt.Println(container.GetInstance(nil, HelloString{}))
 }
