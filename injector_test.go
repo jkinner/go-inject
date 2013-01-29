@@ -244,6 +244,45 @@ func TestDelegateToParentInjector(t *testing.T) {
 	}
 }
 
+func TestChildInjectorUsedForChildBindings(t *testing.T) {
+	parent := CreateInjector()
+	child := parent.CreateChildInjector()
+
+	child.BindTaggedInstance(reflect.TypeOf(""), Thing1{}, "foo")
+	child.Bind(reflect.TypeOf(""), func(context Context, container Container) interface{} {
+		fmt.Printf("Calling child provider with container %+v\n", container)
+		return container.GetTaggedInstance(context, reflect.TypeOf(""), Thing1{})
+	})
+
+	child.Expose(reflect.TypeOf(""))
+	value := parent.CreateContainer().GetInstance(nil /* context */, reflect.TypeOf(""))
+	if value == nil || value != "foo" {
+		t.Error("Expected to get child binding for string value 'foo' via child tagged binding")
+	}
+}
+
+func TestSameBindingMultipleChildContainers(t *testing.T) {
+	parent := CreateInjector()
+	child1 := parent.CreateChildInjector()
+	child2 := parent.CreateChildInjector()
+
+	child1.BindTaggedInstance(reflect.TypeOf(""), Thing1{}, "foo")
+	child2.BindTaggedInstance(reflect.TypeOf(""), Thing1{}, "bar")
+
+	child1.ExposeTagged(reflect.TypeOf(""), Thing1{})
+	child2.ExposeTaggedAndRenameTagged(reflect.TypeOf(""), Thing1{}, reflect.TypeOf(""), Thing2{})
+
+	container := parent.CreateContainer()
+	value := container.GetTaggedInstance(nil /* context */, reflect.TypeOf(""), Thing1{})
+	if value == nil || value != "foo" {
+		t.Error("Expected to get child binding for string value 'foo' via child container")
+	}
+	value = container.GetTaggedInstance(nil /* context */, reflect.TypeOf(""), Thing2{})
+	if value == nil || value != "bar" {
+		t.Error("Expected to get child binding for string value 'bar' via child container")
+	}
+}
+
 func TestExposeToParent(t *testing.T) {
 	parent := CreateInjector()
 	child := parent.CreateChildInjector()
@@ -286,6 +325,24 @@ func TestAlreadyBoundInChildInjector(t *testing.T) {
 	parent.BindInstance(reflect.TypeOf(""), "foo")
 	child.Expose(reflect.TypeOf(""))
 	t.Error("Expected to fail because already bound in child injector")
+}
+
+func TestExposeAndTag(t *testing.T) {
+	parent := CreateInjector()
+	child := parent.CreateChildInjector()
+
+	child.BindInstance(reflect.TypeOf(""), "bar")
+	parent.BindInstance(reflect.TypeOf(""), "foo")
+	child.ExposeAndTag(reflect.TypeOf(""), Thing1{})
+	container := parent.CreateContainer()
+	value := container.GetTaggedInstance(nil, reflect.TypeOf(""), Thing1{})
+	if value == nil || value != "bar" {
+		t.Error("Expected the parent to have a binding to the tagged value")
+	}
+	value = container.GetInstance(nil, reflect.TypeOf(""))
+	if value == nil || value != "foo" {
+		t.Error("Expected the parent to have an untagged binding")
+	}
 }
 
 func TestAlreadyBoundInParentInjector(t *testing.T) {

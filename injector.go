@@ -97,20 +97,25 @@ type Injector interface {
 	ExposeTagged(Key, Tag)
 
 	// Gets the binding for a key, searching the current injector and all ancestor injectors.
-	getBinding(Key) (Provider, bool)
+	getBinding(Key) (binding, bool)
 
 	/*
 		Searches the parent injector for the key, continuing to search upward until the
 		root injector is found.
 	*/
-	findAncestorBinding(Key) (Provider, bool)
+	findAncestorBinding(Key) (binding, bool)
 }
 
 // The context holds all the keys used by a given object.
-type context map[Key]Key
+type keyset map[Key]Key
+
+type binding struct {
+	injector *injector
+	provider Provider
+}
 
 // Bindings for each key in the injector.
-type bindings map[Key]Provider
+type bindings map[Key]binding
 
 type scopes map[Tag]Scope
 
@@ -119,16 +124,13 @@ type injector struct {
 	bindings
 
 	// Registered scopes (shared among all injectors)
-	scopes scopes
+	scopes
 
 	// The parent injector. See getBinding(), findAncestorBinding().
 	parent *injector
 
-	// A pointer to the context for this injector and all ancestor and descendant injectors.
-	context context
-
-	// A pointer to the context for just descendant injectors.
-	descendantContext context
+	// A pointer to the keyset for this injector and all ancestor and descendant injectors.
+	keyset
 }
 
 func CreateInjector() Injector {
@@ -136,27 +138,36 @@ func CreateInjector() Injector {
 	scopes := make(scopes)
 	scopes[Singleton{}] = &singleton
 	return &injector{
-		bindings: 					make(map[Key]Provider),
+		bindings: 					make(map[Key]binding),
 		scopes:   					scopes,
 		parent:   					nil,
-		context:  					make(context),
-		descendantContext:  make(context),
+		keyset:							make(keyset),	
 	}
 }
 
+// Creates a child injector that can contain bindings not available to the parent injector.
+func (this *injector) CreateChildInjector() Injector {
+	child := injector{
+		bindings: make(map[Key]binding),
+		scopes:							this.scopes,
+		parent:						  this,
+		keyset:							this.keyset,
+	}
+
+	return &child
+}
+
 func (this injector) Bind(key Key, provider Provider) {
-	if _, exists := this.context[key]; exists {
-		panic(fmt.Sprintf("%v is already bound.", key))
+	if _, exists := this.bindings[key]; exists {
+		panic(fmt.Sprintf("%s is already bound.", key))
 	}
 
 	if _, exists := this.findAncestorBinding(key); exists {
-		panic(fmt.Sprintf("%v is already bound in an ancestor injector.", key))
+		panic(fmt.Sprintf("%s is already bound in an ancestor injector.", key))
 	}
 
-	this.context[key] = key
-	this.descendantContext[key] = key
-
-	this.bindings[key] = provider
+	this.keyset[key] = key
+	this.bindings[key] = binding { &this, provider }
 }
 
 func (this injector) BindInScope(key Key, provider Provider, scopeTag Tag) {
@@ -193,24 +204,13 @@ func (this injector) BindTaggedInstanceInScope(bindingType Key, tag Tag, value i
 	this.BindInstanceInScope(taggedKey { bindingType, tag }, value, scopeTag)
 }
 
-// Creates a child injector that can contain bindings not available to the parent injector.
-func (this *injector) CreateChildInjector() Injector {
-	child := injector{
-		bindings: make(map[Key]Provider),
-		scopes:							this.scopes,
-		parent:						  this,
-		context:						make(context),
-		descendantContext:	this.descendantContext,
-	}
-
-	return &child
-}
-
 // Creates a Container that is used to request values during object creation.
 func (this injector) CreateContainer() Container {
 	return container{
-		this,
-		make(context),
+		&this,
+		make(keyset),
+		nil,
+		make(map[*injector]*container),
 	}
 }
 
@@ -252,22 +252,22 @@ func (this injector) ExposeAndRename(childKey Key, parentKey Key) {
 	this.parent.bindings[parentKey] = this.bindings[childKey]
 }
 
-func (this injector) getBinding(key Key) (provider Provider, ok bool) {
-	provider, ok = this.bindings[key]
-	return
+func (this injector) getBinding(key Key) (binding, bool) {
+	binding, ok := this.bindings[key]
+	return binding, ok
 }
 
-func (this injector) findAncestorBinding(key Key) (Provider, bool) {
+func (this injector) findAncestorBinding(key Key) (binding, bool) {
 	parent := this.parent
 	for parent != nil {
-		if provider, ok := this.parent.getBinding(key); ok {
-			return provider, ok
+		if binding, ok := this.parent.getBinding(key); ok {
+			return binding, ok
 		}
 
 		parent = parent.parent
 	}
 
-	return nil, false
+	return binding{}, false
 }
 
 /*
@@ -320,31 +320,60 @@ type Container interface {
 
 type container struct {
 	// The injector holding the bindings available to the container.
-	injector
+	injector *injector
 
-	// The invocation context, holding all the previous requests to prevent duplicate requests.
-	context
+	// The invocation keyset, holding all the previous requests to prevent duplicate requests.
+	keyset
+
+	// The parent container; used for exposed child bindings.
+	parent *container
+
+	// Child container for each injector
+	children map[*injector]*container
+}
+
+func createChildProvider(parent *container, binding binding) Provider {
+	var childContainer *container
+
+	if bindingContainer, ok := parent.children[binding.injector]; ok {
+		childContainer = bindingContainer
+	} else {
+		container := container {
+			binding.injector,
+			make(keyset),
+			parent,
+			parent.children,
+		}
+		childContainer = &container
+		parent.children[binding.injector] = childContainer
+	}
+
+	return func(context Context, container Container) interface{} {
+		return binding.provider(context, childContainer)
+	}
 }
 
 // Returns a Provider that can create an instance of the type bound to the key.
 func (this container) GetProvider(key Key) Provider {
-	if _, exists := this.context[key]; exists {
-		panic(fmt.Sprintf("Already looked up %v. Is there a cycle of dependencies?", key))
+	if _, exists := this.keyset[key]; exists {
+		panic(fmt.Sprintf("Already looked up %s (%+v). Is there a cycle of dependencies?", key, reflect.TypeOf(key)))
 	}
 
-	this.context[key] = key
+	this.keyset[key] = key
 
-	var provider, ok = this.bindings[key]
-	if ok {
-		return provider
+	if binding, ok := this.injector.bindings[key]; ok {
+		if binding.injector == this.injector {
+			return binding.provider
+		} else {
+			return createChildProvider(&this, binding)
+		}
 	}
 
-	provider, ok = this.findAncestorBinding(key)
-	if ok {
-		return provider
+	if binding, ok := this.injector.findAncestorBinding(key); ok {
+		return createChildProvider(&this, binding)
 	}
 
-	panic(fmt.Sprintf("Unable to find %v in injector", key))
+	panic(fmt.Sprintf("Unable to find %s in injector", key))
 }
 
 // Returns a Provider that can create an instance of the instanceType tagged with tag.
