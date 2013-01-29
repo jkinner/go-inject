@@ -6,16 +6,22 @@ import (
 	"github.com/jkinner/goose"
 	"log"
 	"net/http"
-	"reflect"
 )
 
 // Value for the http_port flag (default: 80)
 var httpPort *int = flag.Int("http_port", 80, "port on which to start the http listener")
 
-type Port struct{}
+// Container key for the HTTP server itself
+type Server struct{}
+
+// Container key for looking up handlers.
 type Handlers struct{}
-// Tag on the Handlers key (specifying that the handlers are func handlers)
+
+// Tag on the Handlers key that specifies that the handlers are functions.
 type Func struct{}
+
+// Container key for the HTTP port for the server.
+type Port struct{}
 
 // Scope tag for the caching in the context of the *http.Request
 type RequestScoped struct{}
@@ -67,11 +73,16 @@ func ConfigureFlags(injector goose.Injector) {
 }
 
 // Binds the following:
-//   reflect.TypeOf(http.Server{}) - the HTTP server itself
+//   RequestScoped scope
+func ConfigureScopes(injector goose.Injector) {
+	injector.BindScope(requestScope, RequestScoped{})
+}
+
+// Binds the following:
+//   goose_http.Server{} - the HTTP server itself
 // Requires these bindings:
 //   goose_http.Handlers - a HandlerMap assigning a path to a http.Handler
 //   goose_http.Handlers<goose_http.Func> - a HanderFuncMap assigning a path to a handler func
 func ConfigureInjector(injector goose.Injector) {
-	injector.BindScope(requestScope, RequestScoped{})
-	injector.Bind(reflect.TypeOf(http.Server{}), providesHttpServer)
+	injector.Bind(Server{}, providesHttpServer)
 }

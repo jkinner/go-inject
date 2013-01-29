@@ -7,7 +7,6 @@ import (
 	"github.com/jkinner/goose/http"
 	"log"
 	"net/http"
-	"reflect"
 )
 
 type UserId struct{}
@@ -18,7 +17,6 @@ func ConfigureInjector(injector goose.Injector) {
 
 	i := 0
 	injector.BindInScope(UserId{}, func(_ goose.Context, _ goose.Container) interface{} {
-		fmt.Println("Creating a new UserId")
 		i += 1
 		return i
 	}, goose_http.RequestScoped{})
@@ -40,9 +38,10 @@ func main() {
 	flag.Parse()
 	injector := goose.CreateInjector()
 	goose_http.ConfigureFlags(injector)
+	goose_http.ConfigureScopes(injector)
 	goose_http.ConfigureInjector(injector)
 	ConfigureInjector(injector)
 	container := injector.CreateContainer()
-	httpServer := container.GetInstance(nil, reflect.TypeOf(http.Server{})).(http.Server)
+	httpServer := container.GetInstance(nil, goose_http.Server{}).(http.Server)
 	log.Fatal(httpServer.ListenAndServe())
 }
