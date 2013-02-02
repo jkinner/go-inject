@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/jkinner/goose"
+	"github.com/jkinner/goose/multi"
 	"log"
 	"net/http"
 )
@@ -26,7 +27,7 @@ type Port struct{}
 // Scope tag for the caching in the context of the *http.Request
 type RequestScoped struct{}
 
-type HandlerMap map[string]http.Handler
+type HandlerMap map[interface{}]interface{}
 type HandlerFuncMap map[string]func(http.ResponseWriter, *http.Request)
 
 var requestScope = goose.CreateSimpleScopeWithName("HTTP Request")
@@ -45,18 +46,28 @@ func providesHttpServer(_ goose.Context, container goose.Container) interface{} 
 	port := container.GetInstance(nil, Port{}).(int)
 
 	serveMux := http.NewServeMux()
-	handlers := container.GetInstance(nil, Handlers{}).(HandlerMap)
+
+	handlers := container.GetTaggedInstance(
+		nil,
+		Handlers{},
+		goose_multi.Values{},
+	).(map[interface{}]interface{})
 	for path, handler := range(handlers) {
-		serveMux.Handle(path, scopingHandler { handler })
+		serveMux.Handle(path.(string), scopingHandler { handler.(http.Handler) })
 	}
 
-	handlerFuncs := container.GetTaggedInstance(nil, Handlers{}, Func{}).(HandlerFuncMap)
+	handlerFuncs := container.GetTaggedInstance(
+		nil,
+		goose.TaggedKey { Handlers{}, Func{} },
+		goose_multi.Values{},
+	).(map[interface{}]interface{})
 	for path, handlerFunc := range(handlerFuncs) {
-		serveMux.HandleFunc(path, func(w http.ResponseWriter, request *http.Request) {
-			defer requestScope.Exit(request)
-			requestScope.Enter(request)
-			handlerFunc(w, request)
-		})
+		serveMux.HandleFunc(path.(string),
+			func(w http.ResponseWriter, request *http.Request) {
+				defer requestScope.Exit(request)
+				requestScope.Enter(request)
+				handlerFunc.(func (http.ResponseWriter, *http.Request))(w, request)
+			})
 	}
 
 	log.Printf("Creating HTTP server listening on port %d", port)
@@ -85,4 +96,25 @@ func ConfigureScopes(injector goose.Injector) {
 //   goose_http.Handlers<goose_http.Func> - a HanderFuncMap assigning a path to a handler func
 func ConfigureInjector(injector goose.Injector) {
 	injector.Bind(Server{}, providesHttpServer)
+	goose_multi.EnsureMapBound(injector, Handlers{})
+	goose_multi.EnsureMapBound(injector, goose.TaggedKey {Handlers{}, Func{}})
+}
+
+func BindHandler(injector goose.Injector, pattern string, handler http.Handler) {
+	goose_multi.BindMapInstance(
+		injector,
+		Handlers{},
+		pattern,
+		handler,
+	)
+}
+
+func BindHandlerFunc(injector goose.Injector, pattern string, handlerFunc func (http.ResponseWriter, *http.Request)) {
+	goose_multi.BindMapTaggedInstance(
+		injector,
+		Handlers{},
+		Func{},
+		pattern,
+		handlerFunc,
+	)
 }

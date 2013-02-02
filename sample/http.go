@@ -9,29 +9,38 @@ import (
 	"net/http"
 )
 
-type UserId struct{}
+type Counter struct{}
+
+func sayFoo(w http.ResponseWriter, request *http.Request) {
+	w.Header().Add(
+		"Content-Type",
+		"text/plain",
+	)
+	w.Write([]byte(fmt.Sprintf("Foo\n")))
+}
 
 func ConfigureInjector(injector goose.Injector) {
-	handlers := make(goose_http.HandlerMap)
-	handlerFuncs := make(goose_http.HandlerFuncMap)
-
 	i := 0
-	injector.BindInScope(UserId{}, func(_ goose.Context, _ goose.Container) interface{} {
+	injector.BindInScope(Counter{}, func(_ goose.Context, _ goose.Container) interface{} {
 		i += 1
 		return i
 	}, goose_http.RequestScoped{})
 
-	handlerFuncs["/"] = func(w http.ResponseWriter, request *http.Request) {
-		w.Header().Add(
-			"Content-Type",
-			"text/plain",
-		)
-		w.Write([]byte(fmt.Sprintf("Hello, %d!\n", injector.CreateContainer().GetInstance(request, UserId{}).(int))))
-		w.Write([]byte(fmt.Sprintf("Hello, %d!", injector.CreateContainer().GetInstance(request, UserId{}).(int))))
-	}
+	goose_http.BindHandlerFunc(injector, "/",
+		func (w http.ResponseWriter, request *http.Request) {
+			w.Header().Add(
+				"Content-Type",
+				"text/plain",
+			)
+			w.Write([]byte(fmt.Sprintf("Hello! (%d)\n",
+				injector.CreateContainer().GetInstance(request, Counter{}).(int))))
+			w.Write([]byte(fmt.Sprintf("Hello! (%d)\n",
+				injector.CreateContainer().GetInstance(request, Counter{}).(int))))
+		})
+}
 
-	injector.BindInstance(goose_http.Handlers{}, handlers)
-	injector.BindTaggedInstance(goose_http.Handlers{}, goose_http.Func{}, handlerFuncs)
+func ConfigureFooInjector(injector goose.Injector) {
+	goose_http.BindHandlerFunc(injector, "/foo/", sayFoo)
 }
 
 func main() {
@@ -40,6 +49,7 @@ func main() {
 	goose_http.ConfigureFlags(injector)
 	goose_http.ConfigureScopes(injector)
 	goose_http.ConfigureInjector(injector)
+	ConfigureFooInjector(injector)
 	ConfigureInjector(injector)
 	container := injector.CreateContainer()
 	httpServer := container.GetInstance(nil, goose_http.Server{}).(http.Server)

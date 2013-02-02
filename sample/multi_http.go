@@ -12,26 +12,23 @@ import (
 type UserId struct{}
 
 func ConfigureInjector(injector goose.Injector) {
-	handlers := make(goose_http.HandlerMap)
-	handlerFuncs := make(goose_http.HandlerFuncMap)
-
 	i := 0
 	injector.BindInScope(UserId{}, func(_ goose.Context, _ goose.Container) interface{} {
 		i += 1
 		return i
 	}, goose_http.RequestScoped{})
 
-	handlerFuncs["/"] = func(w http.ResponseWriter, request *http.Request) {
-		w.Header().Add(
-			"Content-Type",
-			"text/plain",
-		)
-		w.Write([]byte(fmt.Sprintf("Hello, %d!\n", injector.CreateContainer().GetInstance(request, UserId{}).(int))))
-		w.Write([]byte(fmt.Sprintf("Hello, %d!", injector.CreateContainer().GetInstance(request, UserId{}).(int))))
-	}
-
-	injector.BindInstance(goose_http.Handlers{}, handlers)
-	injector.BindTaggedInstance(goose_http.Handlers{}, goose_http.Func{}, handlerFuncs)
+	goose_http.BindHandlerFunc(
+		injector,
+		"/",
+		func(w http.ResponseWriter, request *http.Request) {
+			w.Header().Add(
+				"Content-Type",
+				"text/plain",
+			)
+			w.Write([]byte(fmt.Sprintf("Hello, %d!\n", injector.CreateContainer().GetInstance(request, UserId{}).(int))))
+			w.Write([]byte(fmt.Sprintf("Hello, %d!", injector.CreateContainer().GetInstance(request, UserId{}).(int))))
+		})
 }
 
 type OneServer struct{}
