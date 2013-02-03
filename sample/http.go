@@ -44,14 +44,36 @@ func ConfigureFooInjector(injector goose.Injector) {
 }
 
 func main() {
+	// Initialize the flag(s)
 	flag.Parse()
+
+	// Create the injector to begin configuring the bindings.
 	injector := goose.CreateInjector()
+
+	// Bind any flags used in the goose_http module. Flag bindings are in a separate function
+	// so that the module can be used without flags, with explicit bindings (see multi_http.go).
 	goose_http.ConfigureFlags(injector)
+
+	// Bind any scope tags used in the goose_http module. Scope bindings are in a separate function
+	// so the module can be used more than once. The scope binding can only ever happen once.
 	goose_http.ConfigureScopes(injector)
+
+	// Now configure the bindings in the goose_http module. This step can be performed more than
+	// once in multiple child injectors.
 	goose_http.ConfigureInjector(injector)
+
+	// There are multiple ConfigureInjector functions to demonstrate that multiple modules
+	// can configure HTTP mappings. If two modules try to bind the same path, the system will panic.
 	ConfigureFooInjector(injector)
 	ConfigureInjector(injector)
+
+	// Look up an object by creating a Container. The Container ensures there are no dependency
+	// loops configured in the Injector. Top-level code should create a new container for each
+	// object lookup. Provider functions will have a container passed to them, and they use that
+	// container for their lookups.
 	container := injector.CreateContainer()
 	httpServer := container.GetInstance(nil, goose_http.Server{}).(http.Server)
+
+	// Start the HTTP server.
 	log.Fatal(httpServer.ListenAndServe())
 }
