@@ -17,10 +17,10 @@
 package main
 
 import (
-	"flag"
-	"fmt"
 	"code.google.com/p/go-inject"
 	"code.google.com/p/go-inject/http"
+	"flag"
+	"fmt"
 	"log"
 	"net/http"
 )

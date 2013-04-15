@@ -17,9 +17,9 @@
 package main
 
 import (
+	"code.google.com/p/go-inject"
 	"flag"
 	"fmt"
-	"code.google.com/p/go-inject"
 )
 
 var name *string = flag.String("name", "world", "whom to say hello to")

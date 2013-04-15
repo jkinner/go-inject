@@ -153,14 +153,14 @@ type injector struct {
 }
 
 func CreateInjector() Injector {
-	singleton := singletonscope{ make(map[Key]interface{}) }
+	singleton := singletonscope{make(map[Key]interface{})}
 	scopes := make(scopes)
 	scopes[Singleton{}] = &singleton
 	return &injector{
-		bindings: 					make(map[Key]binding),
-		scopes:   					scopes,
-		parent:   					nil,
-		keyset:							make(keyset),	
+		bindings: make(map[Key]binding),
+		scopes:   scopes,
+		parent:   nil,
+		keyset:   make(keyset),
 	}
 }
 
@@ -168,9 +168,9 @@ func CreateInjector() Injector {
 func (this *injector) CreateChildInjector() Injector {
 	child := injector{
 		bindings: make(map[Key]binding),
-		scopes:							this.scopes,
-		parent:						  this,
-		keyset:							this.keyset,
+		scopes:   this.scopes,
+		parent:   this,
+		keyset:   this.keyset,
 	}
 
 	return &child
@@ -186,7 +186,7 @@ func (this injector) Bind(key Key, provider Provider) {
 	}
 
 	this.keyset[key] = key
-	this.bindings[key] = binding { &this, provider }
+	this.bindings[key] = binding{&this, provider}
 }
 
 func (this injector) Scope(key Key, provider Provider, scopeTag Tag) Provider {
@@ -210,20 +210,20 @@ func (this injector) BindInstanceInScope(key Key, value interface{}, scopeTag Ta
 }
 
 func (this injector) BindTaggedInScope(bindingType Key, tag Tag, provider Provider, scopeTag Tag) {
-	this.BindInScope(TaggedKey { bindingType, tag }, provider, scopeTag)
+	this.BindInScope(TaggedKey{bindingType, tag}, provider, scopeTag)
 }
 
 func (this injector) BindTagged(instanceType Key, tag Tag, provider Provider) {
-	this.Bind(TaggedKey { instanceType, tag }, provider)
+	this.Bind(TaggedKey{instanceType, tag}, provider)
 }
 
 func (this injector) BindTaggedInstance(instanceType Key, tag Tag,
 	instance interface{}) {
-	this.BindInstance(TaggedKey { instanceType, tag }, instance)
+	this.BindInstance(TaggedKey{instanceType, tag}, instance)
 }
 
 func (this injector) BindTaggedInstanceInScope(bindingType Key, tag Tag, value interface{}, scopeTag Tag) {
-	this.BindInstanceInScope(TaggedKey { bindingType, tag }, value, scopeTag)
+	this.BindInstanceInScope(TaggedKey{bindingType, tag}, value, scopeTag)
 }
 
 // Creates a Container that is used to request values during object creation.
@@ -241,23 +241,23 @@ func (this injector) Expose(key Key) {
 }
 
 func (this injector) ExposeTagged(key Key, tag Tag) {
-	this.ExposeAndRename(TaggedKey { key, tag }, TaggedKey { key, tag })
+	this.ExposeAndRename(TaggedKey{key, tag}, TaggedKey{key, tag})
 }
 
 func (this injector) ExposeAndTag(key Key, tag Tag) {
-	this.ExposeAndRename(key, TaggedKey { key, tag })
+	this.ExposeAndRename(key, TaggedKey{key, tag})
 }
 
 func (this injector) ExposeTaggedAndRename(key Key, tag Tag, parentKey Key) {
-	this.ExposeAndRename(TaggedKey { key, tag }, parentKey)
+	this.ExposeAndRename(TaggedKey{key, tag}, parentKey)
 }
 
 func (this injector) ExposeTaggedAndRenameTagged(key Key, tag Tag, parentKey Key, parentTag Tag) {
-	this.ExposeAndRename(TaggedKey { key, tag }, TaggedKey { parentKey, parentTag })
+	this.ExposeAndRename(TaggedKey{key, tag}, TaggedKey{parentKey, parentTag})
 }
 
 func (this injector) ExposeAndRenameTagged(key Key, parentKey Key, parentTag Tag) {
-	this.ExposeAndRename(key, TaggedKey { parentKey, parentTag })
+	this.ExposeAndRename(key, TaggedKey{parentKey, parentTag})
 }
 
 func (this injector) ExposeAndRename(childKey Key, parentKey Key) {
@@ -360,7 +360,7 @@ func createChildProvider(parent *container, binding binding) Provider {
 	if bindingContainer, ok := parent.children[binding.injector]; ok {
 		childContainer = bindingContainer
 	} else {
-		container := container {
+		container := container{
 			binding.injector,
 			make(keyset),
 			parent,
@@ -400,7 +400,7 @@ func (this container) GetProvider(key Key) Provider {
 
 // Returns a Provider that can create an instance of the instanceType tagged with tag.
 func (this container) GetTaggedProvider(instanceType Key, tag Tag) Provider {
-	return this.GetProvider(TaggedKey{ instanceType, tag })
+	return this.GetProvider(TaggedKey{instanceType, tag})
 }
 
 // Returns an instance of the type bound to the key.
@@ -410,7 +410,7 @@ func (this container) GetInstance(context Context, key Key) interface{} {
 
 // Returns an instance of the instanceType tagged with tag.
 func (this container) GetTaggedInstance(context Context, instanceType Key, tag Tag) interface{} {
-	return this.GetInstance(context, TaggedKey { instanceType, tag })
+	return this.GetInstance(context, TaggedKey{instanceType, tag})
 }
 
 func (this TaggedKey) String() string {

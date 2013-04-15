@@ -17,10 +17,10 @@
 package main
 
 import (
-	"flag"
-	"fmt"
 	"code.google.com/p/go-inject"
 	"code.google.com/p/go-inject/http"
+	"flag"
+	"fmt"
 	"log"
 	"net/http"
 )
@@ -43,7 +43,7 @@ func ConfigureInjector(injector inject.Injector) {
 	}, inject_http.RequestScoped{})
 
 	inject_http.BindHandlerFunc(injector, "/",
-		func (w http.ResponseWriter, request *http.Request) {
+		func(w http.ResponseWriter, request *http.Request) {
 			w.Header().Add(
 				"Content-Type",
 				"text/plain",

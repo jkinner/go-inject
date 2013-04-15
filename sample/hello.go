@@ -17,8 +17,8 @@
 package main
 
 import (
-	"fmt"
 	"code.google.com/p/go-inject"
+	"fmt"
 	"os"
 	"reflect"
 )

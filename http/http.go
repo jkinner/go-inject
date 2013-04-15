@@ -17,10 +17,10 @@
 package inject_http
 
 import (
-	"flag"
-	"fmt"
 	"code.google.com/p/go-inject"
 	"code.google.com/p/go-inject/multi"
+	"flag"
+	"fmt"
 	"log"
 	"net/http"
 )
@@ -68,28 +68,28 @@ func providesHttpServer(_ inject.Context, container inject.Container) interface{
 		Handlers{},
 		inject_multi.Values{},
 	).(map[interface{}]interface{})
-	for path, handler := range(handlers) {
-		serveMux.Handle(path.(string), scopingHandler { handler.(http.Handler) })
+	for path, handler := range handlers {
+		serveMux.Handle(path.(string), scopingHandler{handler.(http.Handler)})
 	}
 
 	handlerFuncs := container.GetTaggedInstance(
 		nil,
-		inject.TaggedKey { Handlers{}, Func{} },
+		inject.TaggedKey{Handlers{}, Func{}},
 		inject_multi.Values{},
 	).(map[interface{}]interface{})
-	for path, handlerFunc := range(handlerFuncs) {
+	for path, handlerFunc := range handlerFuncs {
 		serveMux.HandleFunc(path.(string),
 			func(w http.ResponseWriter, request *http.Request) {
 				defer requestScope.Exit(request)
 				requestScope.Enter(request)
-				handlerFunc.(func (http.ResponseWriter, *http.Request))(w, request)
+				handlerFunc.(func(http.ResponseWriter, *http.Request))(w, request)
 			})
 	}
 
 	log.Printf("Creating HTTP server listening on port %d", port)
-	return http.Server {
-		Addr:			fmt.Sprintf(":%d", port),
-		Handler:	serveMux,
+	return http.Server{
+		Addr:    fmt.Sprintf(":%d", port),
+		Handler: serveMux,
 	}
 }
 
@@ -113,7 +113,7 @@ func ConfigureScopes(injector inject.Injector) {
 func ConfigureInjector(injector inject.Injector) {
 	injector.Bind(Server{}, providesHttpServer)
 	inject_multi.EnsureMapBound(injector, Handlers{})
-	inject_multi.EnsureMapBound(injector, inject.TaggedKey {Handlers{}, Func{}})
+	inject_multi.EnsureMapBound(injector, inject.TaggedKey{Handlers{}, Func{}})
 }
 
 func BindHandler(injector inject.Injector, pattern string, handler http.Handler) {
@@ -125,7 +125,7 @@ func BindHandler(injector inject.Injector, pattern string, handler http.Handler)
 	)
 }
 
-func BindHandlerFunc(injector inject.Injector, pattern string, handlerFunc func (http.ResponseWriter, *http.Request)) {
+func BindHandlerFunc(injector inject.Injector, pattern string, handlerFunc func(http.ResponseWriter, *http.Request)) {
 	inject_multi.BindMapTaggedInstance(
 		injector,
 		Handlers{},

@@ -32,7 +32,7 @@ const (
 type Thing1 struct{}
 type Thing2 struct{}
 
-type MyContext struct{
+type MyContext struct {
 	string
 }
 
@@ -404,7 +404,7 @@ func TestSingletonScopedBinding(t *testing.T) {
 	}
 }
 
-type TestScope struct {}
+type TestScope struct{}
 
 func TestScopedBindingInvokedWhenScopeResets(t *testing.T) {
 	context := MyContext{"First context"}
