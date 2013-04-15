@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package goose
+package inject
 
 import (
 	"fmt"
@@ -309,7 +309,7 @@ func (this injector) findAncestorBinding(key Key) (binding, bool) {
 		A
 	}
 
-	func ConfigureInjector(injector goose.Injector) {
+	func ConfigureInjector(injector inject.Injector) {
 		injector.Bind(reflect.TypeOf(A(nil)), func (container Container) interface{} {
 			return A { createB(container) }
 		}
@@ -318,7 +318,7 @@ func (this injector) findAncestorBinding(key Key) (binding, bool) {
 		}
 	}
 
-	func createA(container goose.Container) {
+	func createA(container inject.Container) {
 		return A { B: container.GetInstanceForKey(reflect.TypeOf(A(nil))) }
 	}
 

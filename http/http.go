@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-package goose_http
+package inject_http
 
 import (
 	"flag"
 	"fmt"
-	"github.com/jkinner/goose"
-	"github.com/jkinner/goose/multi"
+	"code.google.com/p/go-inject"
+	"code.google.com/p/go-inject/multi"
 	"log"
 	"net/http"
 )
@@ -46,7 +46,7 @@ type RequestScoped struct{}
 type HandlerMap map[interface{}]interface{}
 type HandlerFuncMap map[string]func(http.ResponseWriter, *http.Request)
 
-var requestScope = goose.CreateSimpleScopeWithName("HTTP Request")
+var requestScope = inject.CreateSimpleScopeWithName("HTTP Request")
 
 type scopingHandler struct {
 	handler http.Handler
@@ -58,7 +58,7 @@ func (this scopingHandler) ServeHTTP(writer http.ResponseWriter, request *http.R
 	this.handler.ServeHTTP(writer, request)
 }
 
-func providesHttpServer(_ goose.Context, container goose.Container) interface{} {
+func providesHttpServer(_ inject.Context, container inject.Container) interface{} {
 	port := container.GetInstance(nil, Port{}).(int)
 
 	serveMux := http.NewServeMux()
@@ -66,7 +66,7 @@ func providesHttpServer(_ goose.Context, container goose.Container) interface{} 
 	handlers := container.GetTaggedInstance(
 		nil,
 		Handlers{},
-		goose_multi.Values{},
+		inject_multi.Values{},
 	).(map[interface{}]interface{})
 	for path, handler := range(handlers) {
 		serveMux.Handle(path.(string), scopingHandler { handler.(http.Handler) })
@@ -74,8 +74,8 @@ func providesHttpServer(_ goose.Context, container goose.Container) interface{} 
 
 	handlerFuncs := container.GetTaggedInstance(
 		nil,
-		goose.TaggedKey { Handlers{}, Func{} },
-		goose_multi.Values{},
+		inject.TaggedKey { Handlers{}, Func{} },
+		inject_multi.Values{},
 	).(map[interface{}]interface{})
 	for path, handlerFunc := range(handlerFuncs) {
 		serveMux.HandleFunc(path.(string),
@@ -94,30 +94,30 @@ func providesHttpServer(_ goose.Context, container goose.Container) interface{} 
 }
 
 // Binds the following:
-//   goose_http.Port - the value of the http_port flag
-func ConfigureFlags(injector goose.Injector) {
-	injector.Bind(Port{}, func(_ goose.Context, _ goose.Container) interface{} { return *httpPort })
+//   inject_http.Port - the value of the http_port flag
+func ConfigureFlags(injector inject.Injector) {
+	injector.Bind(Port{}, func(_ inject.Context, _ inject.Container) interface{} { return *httpPort })
 }
 
 // Binds the following:
 //   RequestScoped scope
-func ConfigureScopes(injector goose.Injector) {
+func ConfigureScopes(injector inject.Injector) {
 	injector.BindScope(requestScope, RequestScoped{})
 }
 
 // Binds the following:
-//   goose_http.Server{} - the HTTP server itself
+//   inject_http.Server{} - the HTTP server itself
 // Requires these bindings:
-//   goose_http.Handlers - a HandlerMap assigning a path to a http.Handler
-//   goose_http.Handlers<goose_http.Func> - a HanderFuncMap assigning a path to a handler func
-func ConfigureInjector(injector goose.Injector) {
+//   inject_http.Handlers - a HandlerMap assigning a path to a http.Handler
+//   inject_http.Handlers<inject_http.Func> - a HanderFuncMap assigning a path to a handler func
+func ConfigureInjector(injector inject.Injector) {
 	injector.Bind(Server{}, providesHttpServer)
-	goose_multi.EnsureMapBound(injector, Handlers{})
-	goose_multi.EnsureMapBound(injector, goose.TaggedKey {Handlers{}, Func{}})
+	inject_multi.EnsureMapBound(injector, Handlers{})
+	inject_multi.EnsureMapBound(injector, inject.TaggedKey {Handlers{}, Func{}})
 }
 
-func BindHandler(injector goose.Injector, pattern string, handler http.Handler) {
-	goose_multi.BindMapInstance(
+func BindHandler(injector inject.Injector, pattern string, handler http.Handler) {
+	inject_multi.BindMapInstance(
 		injector,
 		Handlers{},
 		pattern,
@@ -125,8 +125,8 @@ func BindHandler(injector goose.Injector, pattern string, handler http.Handler) 
 	)
 }
 
-func BindHandlerFunc(injector goose.Injector, pattern string, handlerFunc func (http.ResponseWriter, *http.Request)) {
-	goose_multi.BindMapTaggedInstance(
+func BindHandlerFunc(injector inject.Injector, pattern string, handlerFunc func (http.ResponseWriter, *http.Request)) {
+	inject_multi.BindMapTaggedInstance(
 		injector,
 		Handlers{},
 		Func{},

@@ -19,8 +19,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/jkinner/goose"
-	"github.com/jkinner/goose/http"
+	"code.google.com/p/go-inject"
+	"code.google.com/p/go-inject/http"
 	"log"
 	"net/http"
 )
@@ -28,18 +28,18 @@ import (
 type Counter struct{}
 
 // Configure a counter provider that increments on each invocation.
-func ConfigureCounter(injector goose.Injector) {
+func ConfigureCounter(injector inject.Injector) {
 	i := 0
-	injector.BindInScope(Counter{}, func(_ goose.Context, _ goose.Container) interface{} {
+	injector.BindInScope(Counter{}, func(_ inject.Context, _ inject.Container) interface{} {
 		i += 1
 		return i
-	}, goose_http.RequestScoped{})
+	}, inject_http.RequestScoped{})
 }
 
 // Configure HTTP server path mappings and provider functions.
-func ConfigureInjector(injector goose.Injector) {
+func ConfigureInjector(injector inject.Injector) {
 
-	goose_http.BindHandlerFunc(
+	inject_http.BindHandlerFunc(
 		injector,
 		"/",
 		func(w http.ResponseWriter, request *http.Request) {
@@ -56,13 +56,13 @@ type OneServer struct{}
 type TwoServer struct{}
 
 // Configure a single HTTP server on a port and expose it using the tag.
-func ConfigureServer(injector goose.Injector, port int, tag goose.Tag) {
+func ConfigureServer(injector inject.Injector, port int, tag inject.Tag) {
 	// Each HTTP server needs to have a port bound. The port is statically configured here, but
 	// it could be configured using a Provider that allocates an unused port.
-	injector.BindInstance(goose_http.Port{}, port)
-	goose_http.ConfigureInjector(injector)
+	injector.BindInstance(inject_http.Port{}, port)
+	inject_http.ConfigureInjector(injector)
 	ConfigureInjector(injector)
-	injector.ExposeAndTag(goose_http.Server{}, tag)
+	injector.ExposeAndTag(inject_http.Server{}, tag)
 }
 
 func main() {
@@ -70,13 +70,13 @@ func main() {
 	flag.Parse()
 
 	// Create the injector to begin configuring the bindings.
-	injector := goose.CreateInjector()
+	injector := inject.CreateInjector()
 
 	// Don't configure flags, since the HTTP module assumes a single HTTP port in use.
 
-	// Bind any scope tags used in the goose_http module. Scope bindings are in a separate function
+	// Bind any scope tags used in the inject_http module. Scope bindings are in a separate function
 	// so the module can be used more than once. The scope binding can only ever happen once.
-	goose_http.ConfigureScopes(injector)
+	inject_http.ConfigureScopes(injector)
 
 	// Use a global counter. Both HTTP servers will increment at the same time.
 	ConfigureCounter(
@@ -96,7 +96,7 @@ func main() {
 
 	oneHttpServer := injector.CreateContainer().GetTaggedInstance(
 		nil,
-		goose_http.Server{},
+		inject_http.Server{},
 		OneServer{}).(http.Server)
 
 	// What would I do with go-routines? Two HTTP servers at the same time.
@@ -106,7 +106,7 @@ func main() {
 
 	twoHttpServer := injector.CreateContainer().GetTaggedInstance(
 		nil,
-		goose_http.Server{},
+		inject_http.Server{},
 		TwoServer{}).(http.Server)
 	log.Fatal(twoHttpServer.ListenAndServe())
 }

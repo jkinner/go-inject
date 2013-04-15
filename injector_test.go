@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package goose
+package inject
 
 import (
 	"fmt"

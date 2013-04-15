@@ -18,7 +18,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/jkinner/goose"
+	"code.google.com/p/go-inject"
 	"os"
 )
 
@@ -26,9 +26,9 @@ import (
 type HelloString struct{}
 type Name struct{}
 
-func ConfigureInjector(injector goose.Injector) {
+func ConfigureInjector(injector inject.Injector) {
 	injector.Bind(HelloString{},
-		func(context goose.Context, container goose.Container) interface{} {
+		func(context inject.Context, container inject.Container) interface{} {
 			return fmt.Sprintf(
 				"Hello, %s!", container.GetInstance(context, Name{}))
 		})
@@ -40,11 +40,11 @@ func ConfigureInjector(injector goose.Injector) {
 }
 
 func main() {
-	injector := goose.CreateInjector()
+	injector := inject.CreateInjector()
 	ConfigureInjector(injector)
 	sayHello(injector.CreateContainer())
 }
 
-func sayHello(container goose.Container) {
+func sayHello(container inject.Container) {
 	fmt.Println(container.GetInstance(nil, HelloString{}))
 }

@@ -19,8 +19,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/jkinner/goose"
-	"github.com/jkinner/goose/http"
+	"code.google.com/p/go-inject"
+	"code.google.com/p/go-inject/http"
 	"log"
 	"net/http"
 )
@@ -35,14 +35,14 @@ func sayFoo(w http.ResponseWriter, request *http.Request) {
 	w.Write([]byte(fmt.Sprintf("Foo\n")))
 }
 
-func ConfigureInjector(injector goose.Injector) {
+func ConfigureInjector(injector inject.Injector) {
 	i := 0
-	injector.BindInScope(Counter{}, func(_ goose.Context, _ goose.Container) interface{} {
+	injector.BindInScope(Counter{}, func(_ inject.Context, _ inject.Container) interface{} {
 		i += 1
 		return i
-	}, goose_http.RequestScoped{})
+	}, inject_http.RequestScoped{})
 
-	goose_http.BindHandlerFunc(injector, "/",
+	inject_http.BindHandlerFunc(injector, "/",
 		func (w http.ResponseWriter, request *http.Request) {
 			w.Header().Add(
 				"Content-Type",
@@ -55,8 +55,8 @@ func ConfigureInjector(injector goose.Injector) {
 		})
 }
 
-func ConfigureFooInjector(injector goose.Injector) {
-	goose_http.BindHandlerFunc(injector, "/foo/", sayFoo)
+func ConfigureFooInjector(injector inject.Injector) {
+	inject_http.BindHandlerFunc(injector, "/foo/", sayFoo)
 }
 
 func main() {
@@ -64,19 +64,19 @@ func main() {
 	flag.Parse()
 
 	// Create the injector to begin configuring the bindings.
-	injector := goose.CreateInjector()
+	injector := inject.CreateInjector()
 
-	// Bind any flags used in the goose_http module. Flag bindings are in a separate function
+	// Bind any flags used in the inject_http module. Flag bindings are in a separate function
 	// so that the module can be used without flags, with explicit bindings (see multi_http.go).
-	goose_http.ConfigureFlags(injector)
+	inject_http.ConfigureFlags(injector)
 
-	// Bind any scope tags used in the goose_http module. Scope bindings are in a separate function
+	// Bind any scope tags used in the inject_http module. Scope bindings are in a separate function
 	// so the module can be used more than once. The scope binding can only ever happen once.
-	goose_http.ConfigureScopes(injector)
+	inject_http.ConfigureScopes(injector)
 
-	// Now configure the bindings in the goose_http module. This step can be performed more than
+	// Now configure the bindings in the inject_http module. This step can be performed more than
 	// once in multiple child injectors.
-	goose_http.ConfigureInjector(injector)
+	inject_http.ConfigureInjector(injector)
 
 	// There are multiple ConfigureInjector functions to demonstrate that multiple modules
 	// can configure HTTP mappings. If two modules try to bind the same path, the system will panic.
@@ -88,7 +88,7 @@ func main() {
 	// object lookup. Provider functions will have a container passed to them, and they use that
 	// container for their lookups.
 	container := injector.CreateContainer()
-	httpServer := container.GetInstance(nil, goose_http.Server{}).(http.Server)
+	httpServer := container.GetInstance(nil, inject_http.Server{}).(http.Server)
 
 	// Start the HTTP server.
 	log.Fatal(httpServer.ListenAndServe())

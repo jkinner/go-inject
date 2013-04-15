@@ -18,7 +18,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/jkinner/goose"
+	"code.google.com/p/go-inject"
 	"os"
 	"reflect"
 )
@@ -27,7 +27,7 @@ import (
 	This is sort of how Guice works. But it's not really go-ish.
 */
 func main() {
-	injector := goose.CreateInjector()
+	injector := inject.CreateInjector()
 	var name = "world"
 	if len(os.Args) > 1 {
 		name = os.Args[1]
@@ -37,6 +37,6 @@ func main() {
 	sayHello(injector.CreateContainer())
 }
 
-func sayHello(container goose.Container) {
+func sayHello(container inject.Container) {
 	fmt.Println(fmt.Sprintf("Hello, %s!", container.GetInstance(nil, reflect.TypeOf(""))))
 }

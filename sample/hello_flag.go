@@ -19,7 +19,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/jkinner/goose"
+	"code.google.com/p/go-inject"
 )
 
 var name *string = flag.String("name", "world", "whom to say hello to")
@@ -33,12 +33,12 @@ type Name struct{}
 */
 func main() {
 	flag.Parse()
-	injector := goose.CreateInjector()
+	injector := inject.CreateInjector()
 	// Bind flag
-	injector.Bind(Name{}, func(_ goose.Context, _ goose.Container) interface{} { return *name })
+	injector.Bind(Name{}, func(_ inject.Context, _ inject.Container) interface{} { return *name })
 	sayHello(injector.CreateContainer())
 }
 
-func sayHello(container goose.Container) {
+func sayHello(container inject.Container) {
 	fmt.Println(fmt.Sprintf("Hello, %s!", container.GetInstance(nil, Name{})))
 }
